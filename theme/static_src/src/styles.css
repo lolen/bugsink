@@ -1,14 +1,196 @@
-@config "../tailwind.config.js";
 @import "tailwindcss";
 
-/* Preserve Tailwind 3 behavior: default border color was gray.200
-the dark-mode stuff is actually an improvement over our previous design @tailwind 3 that we simply added
-because we were in the process of fixing borders globally anyway */
+@plugin "@tailwindcss/forms";
+@plugin "@tailwindcss/typography";
+@plugin "@tailwindcss/aspect-ratio";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@source "../../../issues/views.py";
+@source "../../../theme/templatetags/code.py";
+@source "../../../theme/templatetags/tailwind_forms.py";
+
+@source "../../../templates/**/*.html";
+@source "../../../alerts/templates/**/*.html";
+@source "../../../api/templates/**/*.html";
+@source "../../../bsmain/templates/**/*.html";
+@source "../../../bugsink/templates/**/*.html";
+@source "../../../compat/templates/**/*.html";
+@source "../../../events/templates/**/*.html";
+@source "../../../ee/templates/**/*.html";
+@source "../../../ingest/templates/**/*.html";
+@source "../../../issues/templates/**/*.html";
+@source "../../../files/templates/**/*.html";
+@source "../../../performance/templates/**/*.html";
+@source "../../../phonehome/templates/**/*.html";
+@source "../../../projects/templates/**/*.html";
+@source "../../../releases/templates/**/*.html";
+@source "../../../sentry/templates/**/*.html";
+@source "../../../sentry_sdk_extensions/templates/**/*.html";
+@source "../../../snappea/templates/**/*.html";
+@source "../../../tags/templates/**/*.html";
+@source "../../../teams/templates/**/*.html";
+@source "../../../templates/templates/**/*.html";
+@source "../../../theme/templates/**/*.html";
+@source "../../../users/templates/**/*.html";
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --breakpoint-3xl: 1920px;
+  --spacing-128: 32rem;
+
+  --color-ground:        var(--bs-ground);
+  --color-surface:       var(--bs-surface);
+  --color-raised:        var(--bs-raised);
+  --color-sunken:        var(--bs-sunken);
+
+  --color-edge:          var(--bs-edge);
+  --color-edge-soft:     var(--bs-edge-soft);
+
+  --color-ink:           var(--bs-ink);
+  --color-ink-dim:       var(--bs-ink-dim);
+  --color-ink-muted:     var(--bs-ink-muted);
+
+  --color-accent:        var(--bs-accent);
+  --color-accent-ink:    var(--bs-accent-ink);
+  --color-accent-wash:   var(--bs-accent-wash);
+
+  --color-critical:      var(--bs-critical);
+  --color-critical-ink:  var(--bs-critical-ink);
+  --color-critical-wash: var(--bs-critical-wash);
+  --color-warning:       var(--bs-warning);
+  --color-warning-wash:  var(--bs-warning-wash);
+  --color-ok:            var(--bs-ok);
+  --color-ok-wash:       var(--bs-ok-wash);
+
+  --color-scrim:         var(--bs-scrim);
+
+  --container-page: 80rem;
+}
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --bs-ground:        #f3f6f9;
+  --bs-surface:       #ffffff;
+  --bs-raised:        #edf1f5;
+  --bs-sunken:        #e6ebf0;
+
+  --bs-edge:          #d7dee5;
+  --bs-edge-soft:     #e2e8ee;
+
+  --bs-ink:           #10181f;
+  --bs-ink-dim:       #48555f;
+  --bs-ink-muted:     #71808c;
+
+  --bs-accent:        #1183d4;
+  --bs-accent-ink:    #ffffff;
+  --bs-accent-wash:   #e3f1fc;
+
+  --bs-critical:      #d6304a;
+  --bs-critical-ink:  #ffffff;
+  --bs-critical-wash: #fce9ec;
+  --bs-warning:       #a5680a;
+  --bs-warning-wash:  #fbf1de;
+  --bs-ok:            #157a56;
+  --bs-ok-wash:       #e3f5ee;
+  --bs-scrim:         rgba(16, 24, 31, .55);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bs-ground:        #0f151b;
+  --bs-surface:       #151d26;
+  --bs-raised:        #1c2731;
+  --bs-sunken:        #0b1017;
+
+  --bs-edge:          #2a3742;
+  --bs-edge-soft:     #212c36;
+
+  --bs-ink:           #c9d4dd;
+  --bs-ink-dim:       #93a1ac;
+  --bs-ink-muted:     #76848f;
+
+  --bs-accent:        #4ba1e0;
+  --bs-accent-ink:    #071016;
+  --bs-accent-wash:   #16293a;
+
+  --bs-critical:      #ef7186;
+  --bs-critical-ink:  #2a0d12;
+  --bs-critical-wash: #38181f;
+  --bs-warning:       #d29c47;
+  --bs-warning-wash:  #322612;
+  --bs-ok:            #46c194;
+  --bs-ok-wash:       #122d24;
+  --bs-scrim:         rgba(0, 0, 0, .68);
+}
 
 @layer base {
   *, ::before, ::after {
-    @apply border-gray-200 dark:border-slate-800;
+    @apply border-edge;
   }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+    opacity: .4;
+  }
+
+  [data-theme="dark"] {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .theme-icon-moon { display: block; }
+  .theme-icon-sun { display: none; }
+  [data-theme="dark"] .theme-icon-moon { display: none; }
+  [data-theme="dark"] .theme-icon-sun { display: block; }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: var(--color-ink);
+    -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
+    box-shadow: 0 0 0 1000px var(--color-surface) inset;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
+  input:autofill {
+    color: var(--color-ink);
+    background-color: var(--color-surface);
+  }
+
+  a.text-accent:hover {
+    text-decoration: underline;
+  }
+
+  button:not(:disabled), a[class*="active:ring-3"] {
+    transition: background-color .12s ease-out, filter .12s ease-out, box-shadow .12s ease-out,
+      border-color .12s ease-out, color .12s ease-out;
+  }
+
+  [class*="active:ring-3"] {
+    --tw-ring-color: var(--color-accent);
+  }
+
+  /* Keyboard-only focus indicator (does not show on mouse/touch, so the visual design is unchanged). */
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+[class*="hover:bg-raised"][class*="active:ring-3"]:hover {
+  background-color: var(--color-accent-wash);
 }
 
 /* ibm-plex-sans-regular - cyrillic_cyrillic-ext_greek_latin_latin-ext_vietnamese */
@@ -111,6 +293,17 @@ because we were in the process of fixing borders globally anyway */
     display: flex;
 }
 
+details.menu {
+  position: relative;
+}
+details.menu > summary::-webkit-details-marker {
+  display: none;
+}
+details.menu > div {
+  position: absolute;
+  right: 0;
+}
+
 .triangle-left {
     position:relative;
 }
@@ -119,7 +312,7 @@ because we were in the process of fixing borders globally anyway */
     content: "";
     border-style: solid;
     border-width: 9px 8px 9px 0;
-    border-color: transparent rgb(203 213 225) transparent transparent;
+    border-color: transparent var(--color-edge) transparent transparent;
     position: absolute;
     left: -8px;
     top: 20px;
@@ -129,19 +322,10 @@ because we were in the process of fixing borders globally anyway */
     content: "";
     border-style: solid;
     border-width: 9px 8px 9px 0;
-    border-color: transparent white transparent transparent;
+    border-color: transparent var(--color-surface) transparent transparent;
     position: absolute;
     left: -6px;
     top: 20px;
-}
-
-/* Tailwind dark mode support */
-[data-theme="dark"] .triangle-left:before {
-    border-color: transparent rgb(71 85 105) transparent transparent;
-}
-
-[data-theme="dark"] .triangle-left:after {
-    border-color: transparent rgb(51 65 85) transparent transparent;
 }
 
 /*
@@ -228,17 +412,17 @@ pre { line-height: 125%; }
 [data-theme="dark"] td.linenos .special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
 [data-theme="dark"] span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
 [data-theme="dark"] .syntax-coloring .hll { background-color: #49483e }
-[data-theme="dark"] .syntax-coloring { background: #272822; color: #F8F8F2 }
+[data-theme="dark"] .syntax-coloring { background: transparent; color: var(--color-ink) }
 [data-theme="dark"] .syntax-coloring .c { color: #959077 } /* Comment */
 [data-theme="dark"] .syntax-coloring .err { color: #ED007E; background-color: #1E0010 } /* Error */
-[data-theme="dark"] .syntax-coloring .esc { color: #F8F8F2 } /* Escape */
-[data-theme="dark"] .syntax-coloring .g { color: #F8F8F2 } /* Generic */
+[data-theme="dark"] .syntax-coloring .esc { color: #d5d8d0 } /* Escape */
+[data-theme="dark"] .syntax-coloring .g { color: #d5d8d0 } /* Generic */
 [data-theme="dark"] .syntax-coloring .k { color: #66D9EF } /* Keyword */
 [data-theme="dark"] .syntax-coloring .l { color: #AE81FF } /* Literal */
-[data-theme="dark"] .syntax-coloring .n { color: #F8F8F2 } /* Name */
+[data-theme="dark"] .syntax-coloring .n { color: #d5d8d0 } /* Name */
 [data-theme="dark"] .syntax-coloring .o { color: #FF4689 } /* Operator */
-[data-theme="dark"] .syntax-coloring .x { color: #F8F8F2 } /* Other */
-[data-theme="dark"] .syntax-coloring .p { color: #F8F8F2 } /* Punctuation */
+[data-theme="dark"] .syntax-coloring .x { color: #d5d8d0 } /* Other */
+[data-theme="dark"] .syntax-coloring .p { color: #d5d8d0 } /* Punctuation */
 [data-theme="dark"] .syntax-coloring .ch { color: #959077 } /* Comment.Hashbang */
 [data-theme="dark"] .syntax-coloring .cm { color: #959077 } /* Comment.Multiline */
 [data-theme="dark"] .syntax-coloring .cp { color: #959077 } /* Comment.Preproc */
@@ -246,16 +430,16 @@ pre { line-height: 125%; }
 [data-theme="dark"] .syntax-coloring .c1 { color: #959077 } /* Comment.Single */
 [data-theme="dark"] .syntax-coloring .cs { color: #959077 } /* Comment.Special */
 [data-theme="dark"] .syntax-coloring .gd { color: #FF4689 } /* Generic.Deleted */
-[data-theme="dark"] .syntax-coloring .ge { color: #F8F8F2; font-style: italic } /* Generic.Emph */
-[data-theme="dark"] .syntax-coloring .ges { color: #F8F8F2; font-weight: bold; font-style: italic } /* Generic.EmphStrong */
-[data-theme="dark"] .syntax-coloring .gr { color: #F8F8F2 } /* Generic.Error */
-[data-theme="dark"] .syntax-coloring .gh { color: #F8F8F2 } /* Generic.Heading */
+[data-theme="dark"] .syntax-coloring .ge { color: #d5d8d0; font-style: italic } /* Generic.Emph */
+[data-theme="dark"] .syntax-coloring .ges { color: #d5d8d0; font-weight: bold; font-style: italic } /* Generic.EmphStrong */
+[data-theme="dark"] .syntax-coloring .gr { color: #d5d8d0 } /* Generic.Error */
+[data-theme="dark"] .syntax-coloring .gh { color: #d5d8d0 } /* Generic.Heading */
 [data-theme="dark"] .syntax-coloring .gi { color: #A6E22E } /* Generic.Inserted */
 [data-theme="dark"] .syntax-coloring .go { color: #66D9EF } /* Generic.Output */
 [data-theme="dark"] .syntax-coloring .gp { color: #FF4689; font-weight: bold } /* Generic.Prompt */
-[data-theme="dark"] .syntax-coloring .gs { color: #F8F8F2; font-weight: bold } /* Generic.Strong */
+[data-theme="dark"] .syntax-coloring .gs { color: #d5d8d0; font-weight: bold } /* Generic.Strong */
 [data-theme="dark"] .syntax-coloring .gu { color: #959077 } /* Generic.Subheading */
-[data-theme="dark"] .syntax-coloring .gt { color: #F8F8F2 } /* Generic.Traceback */
+[data-theme="dark"] .syntax-coloring .gt { color: #d5d8d0 } /* Generic.Traceback */
 [data-theme="dark"] .syntax-coloring .kc { color: #66D9EF } /* Keyword.Constant */
 [data-theme="dark"] .syntax-coloring .kd { color: #66D9EF } /* Keyword.Declaration */
 [data-theme="dark"] .syntax-coloring .kn { color: #FF4689 } /* Keyword.Namespace */
@@ -266,22 +450,22 @@ pre { line-height: 125%; }
 [data-theme="dark"] .syntax-coloring .m { color: #AE81FF } /* Literal.Number */
 [data-theme="dark"] .syntax-coloring .s { color: #E6DB74 } /* Literal.String */
 [data-theme="dark"] .syntax-coloring .na { color: #A6E22E } /* Name.Attribute */
-[data-theme="dark"] .syntax-coloring .nb { color: #F8F8F2 } /* Name.Builtin */
+[data-theme="dark"] .syntax-coloring .nb { color: #d5d8d0 } /* Name.Builtin */
 [data-theme="dark"] .syntax-coloring .nc { color: #A6E22E } /* Name.Class */
 [data-theme="dark"] .syntax-coloring .no { color: #66D9EF } /* Name.Constant */
 [data-theme="dark"] .syntax-coloring .nd { color: #A6E22E } /* Name.Decorator */
-[data-theme="dark"] .syntax-coloring .ni { color: #F8F8F2 } /* Name.Entity */
+[data-theme="dark"] .syntax-coloring .ni { color: #d5d8d0 } /* Name.Entity */
 [data-theme="dark"] .syntax-coloring .ne { color: #A6E22E } /* Name.Exception */
 [data-theme="dark"] .syntax-coloring .nf { color: #A6E22E } /* Name.Function */
-[data-theme="dark"] .syntax-coloring .nl { color: #F8F8F2 } /* Name.Label */
-[data-theme="dark"] .syntax-coloring .nn { color: #F8F8F2 } /* Name.Namespace */
+[data-theme="dark"] .syntax-coloring .nl { color: #d5d8d0 } /* Name.Label */
+[data-theme="dark"] .syntax-coloring .nn { color: #d5d8d0 } /* Name.Namespace */
 [data-theme="dark"] .syntax-coloring .nx { color: #A6E22E } /* Name.Other */
-[data-theme="dark"] .syntax-coloring .py { color: #F8F8F2 } /* Name.Property */
+[data-theme="dark"] .syntax-coloring .py { color: #d5d8d0 } /* Name.Property */
 [data-theme="dark"] .syntax-coloring .nt { color: #FF4689 } /* Name.Tag */
-[data-theme="dark"] .syntax-coloring .nv { color: #F8F8F2 } /* Name.Variable */
+[data-theme="dark"] .syntax-coloring .nv { color: #d5d8d0 } /* Name.Variable */
 [data-theme="dark"] .syntax-coloring .ow { color: #FF4689 } /* Operator.Word */
-[data-theme="dark"] .syntax-coloring .pm { color: #F8F8F2 } /* Punctuation.Marker */
-[data-theme="dark"] .syntax-coloring .w { color: #F8F8F2 } /* Text.Whitespace */
+[data-theme="dark"] .syntax-coloring .pm { color: #d5d8d0 } /* Punctuation.Marker */
+[data-theme="dark"] .syntax-coloring .w { color: #d5d8d0 } /* Text.Whitespace */
 [data-theme="dark"] .syntax-coloring .mb { color: #AE81FF } /* Literal.Number.Bin */
 [data-theme="dark"] .syntax-coloring .mf { color: #AE81FF } /* Literal.Number.Float */
 [data-theme="dark"] .syntax-coloring .mh { color: #AE81FF } /* Literal.Number.Hex */
@@ -300,12 +484,12 @@ pre { line-height: 125%; }
 [data-theme="dark"] .syntax-coloring .sr { color: #E6DB74 } /* Literal.String.Regex */
 [data-theme="dark"] .syntax-coloring .s1 { color: #E6DB74 } /* Literal.String.Single */
 [data-theme="dark"] .syntax-coloring .ss { color: #E6DB74 } /* Literal.String.Symbol */
-[data-theme="dark"] .syntax-coloring .bp { color: #F8F8F2 } /* Name.Builtin.Pseudo */
+[data-theme="dark"] .syntax-coloring .bp { color: #d5d8d0 } /* Name.Builtin.Pseudo */
 [data-theme="dark"] .syntax-coloring .fm { color: #A6E22E } /* Name.Function.Magic */
-[data-theme="dark"] .syntax-coloring .vc { color: #F8F8F2 } /* Name.Variable.Class */
-[data-theme="dark"] .syntax-coloring .vg { color: #F8F8F2 } /* Name.Variable.Global */
-[data-theme="dark"] .syntax-coloring .vi { color: #F8F8F2 } /* Name.Variable.Instance */
-[data-theme="dark"] .syntax-coloring .vm { color: #F8F8F2 } /* Name.Variable.Magic */
+[data-theme="dark"] .syntax-coloring .vc { color: #d5d8d0 } /* Name.Variable.Class */
+[data-theme="dark"] .syntax-coloring .vg { color: #d5d8d0 } /* Name.Variable.Global */
+[data-theme="dark"] .syntax-coloring .vi { color: #d5d8d0 } /* Name.Variable.Instance */
+[data-theme="dark"] .syntax-coloring .vm { color: #d5d8d0 } /* Name.Variable.Magic */
 [data-theme="dark"] .syntax-coloring .il { color: #AE81FF } /* Literal.Number.Integer.Long */
 
 input[type='radio'] {

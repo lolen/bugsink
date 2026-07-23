@@ -1,14 +1,12 @@
 {% extends "base.html" %}
-{% load static code %}
+{% load static %}
 
 {% block title %}Connect your application · {{ site_title }}{% endblock %}
 
 {% block content %}
 
 
-<div class="flex items-center justify-center">
-
-    <div class="m-4 max-w-4xl flex-auto">
+<div class="m-4">
         <h1 class="text-4xl font-bold">Connect your application</h1>
 
         <div class="mt-4">
@@ -16,52 +14,42 @@
             Bugsink is compatible with the <a href="https://docs.sentry.io/platforms/">Sentry SDKs</a>.
             Use the following DSN to connect your application to Bugsink:
         </div>
-        <div class="js-copy-container flex items-start gap-2">
-            <div class="js-copy-source flex-1 min-w-0">
-{% code %}:::text
-{{ dsn }}
-{% endcode %}
-            </div>
-            <div class="mt-4">
-                {% include "includes/copy_button_only.html" with secondary=True %}
-            </div>
-        </div>
+        {% include "includes/copy_button.html" with copy_value=dsn %}
 
         <h2 class="mt-8 text-2xl font-bold">Language-specific instructions</h2>
         <div class="mt-4">
             Pick your language to get specific instructions on how to set up the SDK:
 
-            <ul class="flex mt-8">
+            <ul class="flex flex-wrap gap-3 mt-4">
                 <li>
-                    <a class="text-cyan-500 dark:text-cyan-300 font-bold text-center" href="python/"><img src="{% static 'images/lang-python.png' %}" class="w-24 mx-4" alt="Python"><div class="mt-2">Python</div></a>
+                    <a class="flex flex-col items-center gap-2 w-28 py-4 border border-edge rounded-md hover:bg-raised hover:border-accent" href="python/"><img src="{% static 'images/lang-python.png' %}" class="w-12 h-12 object-contain" alt="Python"><div class="font-bold text-sm">Python</div></a>
                 </li>
                 <li>
-                    <a class="text-cyan-500 dark:text-cyan-300 font-bold text-center" href="javascript/"><img src="{% static 'images/lang-javascript.png' %}" class="w-24 mx-4" alt="JavaScript"><div class="mt-2">JavaScript</div></a>
+                    <a class="flex flex-col items-center gap-2 w-28 py-4 border border-edge rounded-md hover:bg-raised hover:border-accent" href="javascript/"><img src="{% static 'images/lang-javascript.png' %}" class="w-12 h-12 object-contain" alt="JavaScript"><div class="font-bold text-sm">JavaScript</div></a>
                 </li>
                 <li>
-                    <a class="text-cyan-500 dark:text-cyan-300 font-bold text-center" href="php/"><img src="{% static 'images/lang-php.png' %}" class="w-24 mx-4" alt="PHP"><div class="mt-2">PHP</div></a>
+                    <a class="flex flex-col items-center gap-2 w-28 py-4 border border-edge rounded-md hover:bg-raised hover:border-accent" href="php/"><img src="{% static 'images/lang-php.png' %}" class="w-12 h-12 object-contain" alt="PHP"><div class="font-bold text-sm">PHP</div></a>
                 </li>
                 <li>
-                    <a class="text-cyan-500 dark:text-cyan-300 font-bold text-center" href="go/"><img src="{% static 'images/lang-go.png' %}" class="w-24 mx-4" alt="Go"><div class="mt-2">Go</div></a>
+                    <a class="flex flex-col items-center gap-2 w-28 py-4 border border-edge rounded-md hover:bg-raised hover:border-accent" href="go/"><img src="{% static 'images/lang-go.png' %}" class="w-12 h-12 object-contain" alt="Go"><div class="font-bold text-sm">Go</div></a>
                 </li>
             </ul>
 
         </div>
         <div class="mt-4">
-            Not listed? It will probably work anyway! Just use the DSN above, and let us know if you run into any issues (on <a href="https://github.com/bugsink/bugsink/issues" class="text-cyan-500 dark:text-cyan-300 font-bold">GitHub</a> or <a href="https://discord.gg/6Af6Yzz77C" class="text-cyan-500 dark:text-cyan-300 font-bold">Discord</a>).
+            Not listed? It will probably work anyway! Just use the DSN above, and let us know if you run into any issues (on <a href="https://github.com/bugsink/bugsink/issues" class="text-accent font-bold">GitHub</a> or <a href="https://discord.gg/6Af6Yzz77C" class="text-accent font-bold">Discord</a>).
         </div>
 
         <div class="mt-4">
-            After triggering an event on purpose, it should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-cyan-500 dark:text-cyan-300 font-bold">list of open issues</a>.
+            After triggering an event on purpose, it should now appear in the <a href="{% url "issue_list_open" project_pk=project.pk %}" class="text-accent font-bold">list of open issues</a>.
         </div>
         <h2 class="mt-6 text-2xl font-bold">Further reading</h2>
 
         <div class="mt-4">
-            For more information on how to use the SDK, check the <a href="https://www.bugsink.com/docs/sdk-recommendations/" class="text-cyan-500 dark:text-cyan-300 font-bold">Bugsink-specific SDK recommendations</a>.
+            For more information on how to use the SDK, check the <a href="https://www.bugsink.com/docs/sdk-recommendations/" class="text-accent font-bold">Bugsink-specific SDK recommendations</a>.
         </div>
 
     </div>
-</div>
 
 {% endblock %}
 

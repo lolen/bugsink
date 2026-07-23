@@ -5,164 +5,119 @@
 
 {% block tab_content %}
 
-<h1 class="text-2xl font-bold text-ellipsis whitespace-nowrap overflow-hidden">{% translate "History" %}</h1>
-<div class="italic">{% translate "Most recent first" %}</div>
+<div class="text-sm text-ink-muted mb-3">{% translate "Most recent first" %}</div>
 
+<div class="flex flex-col gap-3">
 
-    <div class="flex"><!-- single turningpoint (for 'your comments')-->
-        <div class="flex-none">
-            <div class="pt-8 pr-2">
-                <img class="w-12 h-12 rounded-full border-2 border-slate-300 dark:border-slate-600" src="https://gravatar.com/avatar/{{ request.user|gravatar_sha }}?s=48&d=robohash" alt="{{ request.user|best_displayname }}">
-            </div>
+    <div class="flex gap-3 p-4 border border-edge rounded-md bg-surface">
+        <div class="h-8 w-8 rounded-full bg-raised border border-edge flex items-center justify-center text-xs font-bold text-ink-dim shrink-0">{{ request.user.username|slice:":2"|upper }}</div>
+        <div class="min-w-0 flex-1">
+            <form action="{% url "history_comment_new" issue_pk=issue.id %}" method="post">
+            {% csrf_token %}
+            <textarea name="comment" placeholder="{% translate 'Add comment as manual annotation...' %}" rows="2" class="bg-surface border border-edge text-sm p-2.5 focus:border-accent focus:ring-accent-wash rounded-md w-full resize-y" onkeypress="submitOnCtrlEnter(event)"></textarea>
+            <button class="font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center mt-2 border rounded-md hover:bg-raised active:ring-3">{% translate "Post comment" %}</button>
+            </form>
         </div>
-        <div class="border-slate-300 dark:border-slate-600 border-2 rounded-md mt-6 flex-auto"><!-- the "your comments balloon" -->
-            <div class="pl-4 flex triangle-left"><!-- 'header' row -->
-                <div class="mt-4 mb-4">
-                    <span class="font-bold text-slate-800 dark:text-slate-100 italic">{% translate "Add comment as manual annotation" %}</span>
-                </div>
+    </div>
 
-                <div class="ml-auto flex"> <!-- 'header' row right side -->
-                    <div class="p-4">
-                        {% translate "Now" %}
-                    </div>
-                </div>
-            </div>
+    {% for turningpoint in issue.turningpoint_set_all %}
+    <div class="flex gap-3 px-4 pb-4 {% if not forloop.last %}border-b border-edge-soft{% endif %}" id="comment-{{ turningpoint.id }}">
+        {% if turningpoint.user_id %}
+        <div class="h-8 w-8 rounded-full bg-raised border border-edge flex items-center justify-center text-xs font-bold text-ink-dim shrink-0">{{ turningpoint.user.username|slice:":2"|upper }}</div>
+        {% else %}
+        <img class="w-8 h-8 shrink-0 dark:hidden block" src="{% static 'images/bugsink-logo.png' %}" alt="Bugsink">
+        <img class="w-8 h-8 shrink-0 hidden dark:block" src="{% static 'images/bugsink-logo-dark.png' %}" alt="Bugsink">
+        {% endif %}
 
-            <div class="border-t-2 pl-4 pr-4 pb-4 border-slate-300 dark:border-slate-600">{# 'body' part of the balloon (separated by a line) #}
-                    <div class="mt-4">
-                    <form action="{% url "history_comment_new" issue_pk=issue.id %}" method="post">
-                    {% csrf_token %}
-                    <textarea name="comment" placeholder="{% translate 'comments...' %}" class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md w-full h-32" onkeypress="submitOnCtrlEnter(event)"></textarea>
-                    <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3">{% translate "Post comment" %}</button>
-                    </form>
-                    </div>
-                </div>{# 'body' part of the balloon #}
-        </div><!-- the "balloon" -->
-    </div><!-- single turningpoint -->
+        <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1 text-sm">
+                <span class="font-bold text-ink">{{ turningpoint.get_kind_display }}</span>
+                <span class="text-ink-muted">{% translate "by" context "History" %}</span>
+                <span class="font-bold text-ink">{% if turningpoint.user_id %}{{ turningpoint.user|best_displayname }}{% else %}Bugsink{% endif %}</span>
 
-
-{% for turningpoint in issue.turningpoint_set_all %}
-    <div class="flex" id="comment-{{ turningpoint.id }}"><!-- single turningpoint -->
-        <div class="flex-none">
-            <div class="pt-8 pr-2">
-                {% if turningpoint.user_id %}
-                <img class="w-12 h-12 rounded-full border-2 border-slate-300 dark:border-slate-600" src="https://gravatar.com/avatar/{{ turningpoint.user|gravatar_sha }}?s=48&d=robohash" alt="{{ turningpoint.user|best_displayname }}">
-                {% else %}
-                <img class="w-12 h-12 rounded-full border-2 border-slate-300 dark:border-slate-600" src="{% static 'images/bugsink-logo.png' %}" alt="Bugsink">
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="border-slate-300 dark:border-slate-600 border-2 rounded-md mt-6 flex-auto js-balloon"><!-- the "balloon" -->
-            <div class="pl-4 flex triangle-left"><!-- 'header' row -->
-                <div class="mt-4 mb-4">
-                    <span class="font-bold text-slate-800 dark:text-slate-100">{{ turningpoint.get_kind_display }}</span> {% translate "by" context "History" %}
-                    <span class="font-bold text-slate-800 dark:text-slate-100">{% if turningpoint.user_id %}{{ turningpoint.user|best_displayname }}{% else %}Bugsink{% endif %}</span>
-
-                    {% if turningpoint.user_id == request.user.id %}
-                    <span class="text-slate-500 dark:text-slate-300 pl-1" onclick="toggleCommentEditable(this)" title="Edit comment">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4 inline">
+                {% if turningpoint.user_id == request.user.id %}
+                <span class="text-ink-muted hover:text-ink pl-1 cursor-pointer" onclick="toggleCommentEditable(this)" title="Edit comment">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4 inline">
   <path fill-rule="evenodd" d="M11.013 2.513a1.75 1.75 0 0 1 2.475 2.474L6.226 12.25a2.751 2.751 0 0 1-.892.596l-2.047.848a.75.75 0 0 1-.98-.98l.848-2.047a2.75 2.75 0 0 1 .596-.892l7.262-7.261Z" clip-rule="evenodd" />
 </svg>
-
-                    </span>
-                    {% if turningpoint.kind == 100 %}
-                    <span class="text-slate-500 dark:text-slate-300 pl-1" onclick="deleteComment('{% url "history_comment_delete" issue_pk=issue.id comment_pk=turningpoint.pk %}')" title="Delete comment">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4 inline">
+                </span>
+                {% if turningpoint.kind == 100 %}
+                <span class="text-ink-muted hover:text-critical pl-1 cursor-pointer" onclick="deleteComment('{% url "history_comment_delete" issue_pk=issue.id comment_pk=turningpoint.pk %}')" title="Delete comment">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4 inline">
   <path fill-rule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clip-rule="evenodd" />
 </svg>
+                </span>
+                {% endif %}
+                {% endif %}
 
-
-                    </span>
-                    {% endif %}
-                    {% endif %}
-
-                </div>
-
-                <div class="ml-auto flex"> <!-- 'header' row right side -->
-
-                    <div class="p-4 text-right">
-                        {{ turningpoint.timestamp|date:"j M G:i T"  }}
-                    </div>
-                </div>
+                <span class="ml-auto text-ink-muted shrink-0 whitespace-nowrap">{{ turningpoint.timestamp|date:"j M G:i T" }}</span>
             </div>
 
-            {% if turningpoint.parsed_metadata or turningpoint.triggering_event_id or turningpoint.comment or turningpoint.user_id == request.user.id %}  {# the last clause means: editable, hence space must be reserved #}
-            <div class="border-t-2 pl-4 pr-4 pb-4 border-slate-300 dark:border-slate-600">{# 'body' part of the balloon (separated by a line) #}
-                    <div class="mt-4">
-                        <div class="js-comment-plain">
-                        {{ turningpoint.comment|linebreaksbr }}
-                        </div>
+            <div class="js-comment-plain text-sm mt-1">{{ turningpoint.comment|linebreaksbr }}</div>
 
-                        {% if turningpoint.user_id == request.user.id %}
-                        <div class="js-comment-editable hidden">
-                            <form action="{% url "history_comment_edit" issue_pk=issue.id comment_pk=turningpoint.pk %}" method="post">
-                            {% csrf_token %}
-                            <textarea name="comment" placeholder="comments..." class="bg-slate-50 dark:bg-slate-800 focus:border-cyan-500 dark:focus:border-cyan-400 focus:ring-cyan-200 dark:focus:ring-cyan-700 rounded-md w-full h-32" onkeypress="submitOnCtrlEnter(event)">{{ turningpoint.comment }}</textarea>{# note: we don't actually use {{ form.comments }} here; this means the show-red-on-invalid loop won't work but since everything is valid and we haven't implemented the other parts of that loop that's fine #}
-                            <button class="font-bold text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 pl-4 pr-4 pb-2 pt-2 mt-2 border-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 active:ring-3">Update comment</button>
-                            </form>
-                        </div>
-                        {% endif %}
-                    </div>
+            {% if turningpoint.user_id == request.user.id %}
+            <div class="js-comment-editable hidden mt-1">
+                <form action="{% url "history_comment_edit" issue_pk=issue.id comment_pk=turningpoint.pk %}" method="post">
+                {% csrf_token %}
+                <textarea name="comment" placeholder="comments..." rows="2" class="bg-surface border border-edge text-sm p-2.5 focus:border-accent focus:ring-accent-wash rounded-md w-full resize-y" onkeypress="submitOnCtrlEnter(event)">{{ turningpoint.comment }}</textarea>{# note: we don't actually use {{ form.comments }} here; this means the show-red-on-invalid loop won't work but since everything is valid and we haven't implemented the other parts of that loop that's fine #}
+                <button class="font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center mt-2 border rounded-md hover:bg-raised active:ring-3">{% translate "Update comment" %}</button>
+                </form>
+            </div>
+            {% endif %}
 
-                {% if turningpoint.parsed_metadata %}
-                <div class="mt-4">
-                    {% if turningpoint.kind == 3 %} {# muted #}
-                        {% if turningpoint.parsed_metadata.mute_unconditionally %}
-                            Muted unconditionally.
-                        {% endif %}
-
-                        {% if turningpoint.parsed_metadata.mute_until %}
-                            Muted until more than {{ turningpoint.parsed_metadata.mute_until.gte_threshold }} events per {{ turningpoint.parsed_metadata.mute_until.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_until.period_name }}{% if turningpoint.parsed_metadata.mute_until.nr_of_periods != 1 %}s{% endif %} occur.
-                        {% endif %}
-
-                        {% if turningpoint.parsed_metadata.mute_for %}
-                            Muted for {{ turningpoint.parsed_metadata.mute_for.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_for.period_name }}{% if turningpoint.parsed_metadata.mute_for.nr_of_periods != 1 %}s{% endif %}, i.e. until {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i T" }}.
-                        {% endif %}
-
-                    {% elif turningpoint.kind == 5 %} {# unmuted #}
-                        {% if turningpoint.parsed_metadata.mute_until %}
-                            More than {{ turningpoint.parsed_metadata.mute_until.volume }} events per {{ turningpoint.parsed_metadata.mute_until.nr_of_periods }} {{ turningpoint.parsed_metadata.mute_until.period }}{% if turningpoint.parsed_metadata.mute_until.nr_of_periods != 1 %}s{% endif %} occurred, unmuting the issue.
-                        {% endif %}
-
-                        {% if turningpoint.parsed_metadata.mute_for %}
-                            An event was observed after the mute-deadline of {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i T" }} and the issue was unmuted.
-                        {% endif %}
-
+            {% if turningpoint.parsed_metadata %}
+            <div class="text-sm text-ink-dim {% if turningpoint.comment %}mt-1{% endif %}">
+                {% if turningpoint.kind == 3 %} {# muted #}
+                    {% if turningpoint.parsed_metadata.mute_unconditionally %}
+                        {% translate "Muted unconditionally." %}
                     {% endif %}
 
-                    {% if turningpoint.parsed_metadata.resolved_unconditionally %}
-                        Marked as 'resolved' (without a specific release-marker).
+                    {% if turningpoint.parsed_metadata.mute_until %}
+                        {% blocktranslate with threshold=turningpoint.parsed_metadata.mute_until.gte_threshold nr=turningpoint.parsed_metadata.mute_until.nr_of_periods period=turningpoint.parsed_metadata.mute_until.period_name %}Muted until more than {{ threshold }} events per {{ nr }} {{ period }}{% endblocktranslate %}{% if turningpoint.parsed_metadata.mute_until.nr_of_periods != 1 %}s{% endif %} occur.
                     {% endif %}
 
-                    {% if turningpoint.parsed_metadata.resolved_release %}
-                        Marked as 'resolved in release {{ turningpoint.parsed_metadata.resolved_release }}'.
+                    {% if turningpoint.parsed_metadata.mute_for %}
+                        {% blocktranslate with nr=turningpoint.parsed_metadata.mute_for.nr_of_periods period=turningpoint.parsed_metadata.mute_for.period_name until=turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i T" %}Muted for {{ nr }} {{ period }}{% endblocktranslate %}{% if turningpoint.parsed_metadata.mute_for.nr_of_periods != 1 %}s{% endif %}, i.e. until {{ turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i T" }}.
                     {% endif %}
 
-                    {% if turningpoint.parsed_metadata.resolve_by_next %}
-                        Marked as 'resolved by next release'.
+                {% elif turningpoint.kind == 5 %} {# unmuted #}
+                    {% if turningpoint.parsed_metadata.mute_until %}
+                        {% blocktranslate with volume=turningpoint.parsed_metadata.mute_until.volume nr=turningpoint.parsed_metadata.mute_until.nr_of_periods period=turningpoint.parsed_metadata.mute_until.period %}More than {{ volume }} events per {{ nr }} {{ period }}{% endblocktranslate %}{% if turningpoint.parsed_metadata.mute_until.nr_of_periods != 1 %}s{% endif %} {% translate "occurred, unmuting the issue." %}
                     {% endif %}
 
-                    {% if turningpoint.parsed_metadata.actual_release %}
-                        A new version was released ({{ turningpoint.parsed_metadata.actual_release }}) and the issue was marked as resolved by that specific release.
+                    {% if turningpoint.parsed_metadata.mute_for %}
+                        {% blocktranslate with until=turningpoint.parsed_metadata.mute_for.unmute_after|date:"j M G:i T" %}An event was observed after the mute-deadline of {{ until }} and the issue was unmuted.{% endblocktranslate %}
                     {% endif %}
-                </div>
                 {% endif %}
 
-                {% if turningpoint.triggering_event_id %}
-                <div class="mt-4">
-                    <a href="{% url "event_by_id" event_pk=turningpoint.triggering_event_id %}" class="underline decoration-dotted font-bold text-slate-500 dark:text-slate-300">Triggering event</a>
-                </div>
+                {% if turningpoint.parsed_metadata.resolved_unconditionally %}
+                    {% translate "Marked as 'resolved' (without a specific release-marker)." %}
                 {% endif %}
 
-                </div>{# 'body' part of the balloon #}
+                {% if turningpoint.parsed_metadata.resolved_release %}
+                    {% blocktranslate with release=turningpoint.parsed_metadata.resolved_release %}Marked as 'resolved in release {{ release }}'.{% endblocktranslate %}
                 {% endif %}
 
-        </div><!-- the "balloon" -->
-    </div><!-- single turningpoint -->
+                {% if turningpoint.parsed_metadata.resolve_by_next %}
+                    {% translate "Marked as 'resolved by next release'." %}
+                {% endif %}
 
+                {% if turningpoint.parsed_metadata.actual_release %}
+                    {% blocktranslate with release=turningpoint.parsed_metadata.actual_release %}A new version was released ({{ release }}) and the issue was marked as resolved by that specific release.{% endblocktranslate %}
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if turningpoint.triggering_event_id %}
+            <div class="{% if turningpoint.comment or turningpoint.parsed_metadata %}mt-1{% endif %}">
+                <a href="{% url "event_by_id" event_pk=turningpoint.triggering_event_id %}" class="text-sm font-bold text-accent">{% translate "Triggering event" %}</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
     {% endfor %}
 
+</div>
 
 {% endblock %}
 

@@ -10,11 +10,15 @@ def tailwind_formfield(formfield, implicit=False):
     if not formfield:
         return {"formfield": None}
 
-    if formfield.errors:
-        formfield.field.widget.attrs['class'] = "bg-red-50 dark:bg-red-900"
+    if formfield.field.disabled:
+        formfield.field.widget.attrs['class'] = "bg-sunken text-ink-muted border border-edge cursor-not-allowed"
+    elif formfield.errors:
+        formfield.field.widget.attrs['class'] = (
+            "bg-critical-wash text-ink border border-critical focus:border-critical focus:ring-critical-wash")
     else:
-        formfield.field.widget.attrs['class'] = "bg-slate-50 dark:bg-slate-800"
-    formfield.field.widget.attrs['class'] += " pl-4 py-2 md:py-4 focus:outline-none w-full"
+        formfield.field.widget.attrs['class'] = (
+            "bg-surface text-ink border border-edge focus:border-accent focus:ring-accent-wash")
+    formfield.field.widget.attrs['class'] += " text-sm rounded-md h-10 px-3 py-2 w-full"
 
     if implicit:
         formfield.field.widget.attrs['placeholder'] = formfield.label

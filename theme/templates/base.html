@@ -1,5 +1,5 @@
 {% load static tailwind_tags version add_to_qs %}{% load i18n %}<!DOCTYPE html>
-<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme_preference }}{% else %}dark{% endif %}">
+<html lang="en" data-theme="{% if user.is_authenticated %}{{ user.theme_preference }}{% else %}system{% endif %}">
     <!-- version: {% version %} -->
 	<head>
     <title>{% block title %}{{ site_title }}{% endblock %}</title>
@@ -24,22 +24,24 @@
     </script>
 	</head>
 
-	<body class="dark:bg-slate-700 dark:text-slate-100">
+	<body class="bg-ground text-ink">
         <div id="content">
 
             {# MOBILE HEADER #}
-            <header class="w-full bg-slate-200 dark:bg-slate-800 md:hidden">
+            <header class="w-full bg-surface border-b md:hidden">
 
               <input type="checkbox" id="nav-toggle" class="peer hidden">
 
-              <nav class="flex items-center justify-between px-4 py-2">
+              <nav class="flex items-center justify-between px-4 h-14">
 
-                <a href="{{ script_prefix }}/" class="font-bold">
+                <a href="{{ script_prefix }}/" class="font-bold flex items-center gap-2">
+                  <img src="{% static 'images/bugsink-logo.png' %}" class="h-6 w-6 dark:hidden block" alt="">
+                  <img src="{% static 'images/bugsink-logo-dark.png' %}" class="h-6 w-6 hidden dark:block" alt="">
                   {{ site_title }}
                 </a>
 
-                <label for="nav-toggle" class="cursor-pointer">
-                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <label for="nav-toggle" class="cursor-pointer" role="button" aria-label="{% translate 'Toggle navigation menu' %}">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                   <path d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
                 </label>
@@ -47,108 +49,140 @@
 
               {# PUSH-DOWN MENU #}
               <div class="hidden peer-checked:block px-4 pb-4">
-                <div class="flex flex-col gap-3 text-right">
+                <div class="flex flex-col gap-1">
 
                   {% if not app_settings.SINGLE_TEAM %}
-                  <a href="{% url "team_list" %}">Teams</a>
+                  <a href="{% url "team_list" %}" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Teams" %}</a>
                   {% endif %}
 
-                  <a href="{% url "project_list" %}">Projects</a>
+                  <a href="{% url "project_list" %}" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Projects" %}</a>
 
-                  <a href="{% url "global_issue_list_open" %}">Issues</a>
+                  <a href="{% url "global_issue_list_open" %}" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Issues" %}</a>
 
                   {% if project %}
-                  <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}">
-                    Issues ({{ project.name }})
+                  <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">
+                    {{ project.name }}
                   </a>
                   {% endif %}
 
-                  <a href="{{ script_prefix }}/accounts/preferences/">Preferences</a>
+                  {% if app_settings.USE_ADMIN and user.is_staff %}
+                  <a href="{{ script_prefix }}/admin/" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Admin" %}</a>
+                  {% endif %}
 
+                  {% if user.is_superuser %}
+                  <a href="{{ script_prefix }}/users/" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Users" %}</a>
+                  <a href="{{ script_prefix }}/bsmain/auth_tokens/" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Tokens" %}</a>
+                  {% endif %}
+
+                  {% if logged_in_user.is_anonymous %}
+                  <a href="{{ script_prefix }}/accounts/login/" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Login" %}</a>
+                  {% else %}
+                  <a href="{{ script_prefix }}/api/canonical/0/schema/swagger-ui/" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "OpenAPI" %}</a>
+                  <a href="{{ script_prefix }}/accounts/preferences/" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Preferences" %}</a>
                   {% for extra_nav_link in extra_nav_links %}
-                  <a href="{{ extra_nav_link.href }}">{{ extra_nav_link.label }}</a>
+                  <a href="{{ extra_nav_link.href }}" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{{ extra_nav_link.label }}</a>
                   {% endfor %}
-
                   <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
-                    <button type="submit" class="text-right w-full">
-                      Log out
+                    <button type="submit" class="w-full text-left px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">
+                      {% translate "Log out" %}
                     </button>
                   </form>
+                  {% endif %}
 
                 </div>
               </div>
             </header>
 
             {# DESKTOP HEADER #}
-            <header class="hidden md:flex pl-4 bg-slate-200 dark:bg-slate-800 items-center">
-                <a href="{{ script_prefix }}/"><img src="{% static 'images/bugsink-logo.png' %}" class="p-2 h-12 w-12 dark:hidden block" alt="Bugsink logo"><img src="{% static 'images/bugsink-logo-dark.png' %}" class="p-2 h-12 w-12 hidden dark:block" alt="Bugsink logo"></a>
-                <a href="{{ script_prefix }}/"><div class="px-2 py-2 my-2 font-bold hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{{ site_title }}</div></a>
+            <header class="hidden md:block sticky top-0 z-30 bg-surface border-b">
+              <nav class="mx-auto w-full max-w-page px-4 h-14 flex items-center gap-0.5">
+
+                <a href="{{ script_prefix }}/" class="flex items-center gap-2 pr-4 mr-1 font-bold tracking-tight">
+                    <img src="{% static 'images/bugsink-logo.png' %}" class="h-6 w-6 dark:hidden block" alt="Bugsink logo"><img src="{% static 'images/bugsink-logo-dark.png' %}" class="h-6 w-6 hidden dark:block" alt="Bugsink logo">
+                    {{ site_title }}
+                </a>
 
                 {% if not app_settings.SINGLE_TEAM %}
-                <a href="{% url "team_list" %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Teams" %}</div></a>
+                <a href="{% url "team_list" %}" class="px-3 py-1.5 rounded-md text-sm hover:bg-raised hover:text-ink {% if request.resolver_match.url_name == 'team_list' %}bg-raised text-ink font-bold{% else %}text-ink-muted{% endif %}">{% translate "Teams" %}</a>
                 {% endif %}
 
-                <a href="{% url "project_list" %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Projects" %}</div></a>
+                <a href="{% url "project_list" %}" class="px-3 py-1.5 rounded-md text-sm hover:bg-raised hover:text-ink {% if request.resolver_match.url_name|slice:":12" == 'project_list' %}bg-raised text-ink font-bold{% else %}text-ink-muted{% endif %}">{% translate "Projects" %}</a>
 
-                <a href="{% url "global_issue_list_open" %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Issues" %}</div></a>
+                <a href="{% url "global_issue_list_open" %}" class="px-3 py-1.5 rounded-md text-sm hover:bg-raised hover:text-ink {% if is_global_issue_list %}bg-raised text-ink font-bold{% else %}text-ink-muted{% endif %}">{% translate "Issues" %}</a>
 
                 {% if project %}
-                <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Issues" %} ({{ project.name }})</div></a>
+                <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}" class="px-3 py-1.5 rounded-md text-sm hover:bg-raised hover:text-ink {% if project and not is_global_issue_list %}bg-raised text-ink font-bold{% else %}text-ink-muted{% endif %}">{{ project.name }}</a>
                 {% endif %}
 
-                <div class="ml-auto flex">
-                {% if app_settings.USE_ADMIN and user.is_staff %}
-                <a href="{{ script_prefix }}/admin/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Admin" %}</div></a>
-                {% endif %}
-
-                {% if user.is_superuser %}
-                <a href="{{ script_prefix }}/users/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Users" %}</div></a>
-                <a href="{{ script_prefix }}/bsmain/auth_tokens/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Tokens" %}</div></a>
-                {% endif %}
-
+                <div class="ml-auto flex items-center gap-0.5">
                 {% if logged_in_user.is_anonymous %}
-                    <a href="{{ script_prefix }}/accounts/login/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Login" %}</div></a>  {# I don't think this is actually ever shown in practice, because you must always be logged in #}
+                    <a href="{{ script_prefix }}/accounts/login/" class="px-3 py-1.5 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Login" %}</a>
                 {% else %}
-                    <a href="{{ script_prefix }}/api/canonical/0/schema/swagger-ui/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "OpenAPI" %}</div></a>
-                    <a href="{{ script_prefix }}/accounts/preferences/"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{% translate "Preferences" %}</div></a>
-                    {% for extra_nav_link in extra_nav_links %}
-                    <a href="{{ extra_nav_link.href }}"><div class="px-4 py-2 my-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl">{{ extra_nav_link.label }}</div></a>
-                    {% endfor %}
-                    <div class="px-4 py-2 my-2 mr-2 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl"><form id="logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">{% translate "Log out" %}</button></form></div>
+                    <form method="post" action="{% url 'set_theme' %}" class="contents">
+                        {% csrf_token %}
+                        <input type="hidden" name="theme_preference" class="js-theme-toggle-value">
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button type="submit" class="js-theme-toggle-btn h-8 w-8 rounded-full flex items-center justify-center text-ink-muted hover:bg-raised hover:text-ink" title="{% translate 'Toggle theme' %}" aria-label="{% translate 'Toggle theme' %}">
+                            <svg class="theme-icon-sun w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg>
+                            <svg class="theme-icon-moon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"></path></svg>
+                        </button>
+                    </form>
+                    <details class="menu ml-1">
+                        <summary class="list-none cursor-pointer h-8 w-8 rounded-full bg-raised border border-edge flex items-center justify-center text-xs font-bold text-ink-dim hover:text-ink">{{ user.username|slice:":2"|upper }}</summary>
+                        <div class="mt-1 min-w-48 bg-surface border border-edge rounded-md shadow-lg py-1">
+                            <a href="{{ script_prefix }}/accounts/preferences/" class="block px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{% translate "Preferences" %}</a>
+                            <a href="{{ script_prefix }}/api/canonical/0/schema/swagger-ui/" class="block px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{% translate "OpenAPI" %}</a>
+                            {% for extra_nav_link in extra_nav_links %}
+                            <a href="{{ extra_nav_link.href }}" class="block px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{{ extra_nav_link.label }}</a>
+                            {% endfor %}
+                            {% if app_settings.USE_ADMIN and user.is_staff %}
+                            <a href="{{ script_prefix }}/admin/" class="block px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{% translate "Admin" %}</a>
+                            {% endif %}
+                            {% if user.is_superuser %}
+                            <a href="{{ script_prefix }}/users/" class="block px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{% translate "Users" %}</a>
+                            <a href="{{ script_prefix }}/bsmain/auth_tokens/" class="block px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{% translate "Tokens" %}</a>
+                            {% endif %}
+                            <form id="logout-form" method="post" action="{% url 'logout' %}" class="border-t mt-1 pt-1">{% csrf_token %}<button type="submit" class="block w-full text-left px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{% translate "Log out" %}</button></form>
+                        </div>
+                    </details>
                 {% endif %}
                 </div>
+              </nav>
             </header>
 
             {% for system_warning in system_warnings %}
-            <div class="flex p-4 bg-yellow-100 dark:bg-amber-800 border-b-2 border-yellow-200 dark:border-amber-900">
-                <div class="text-slate-800 dark:text-slate-100">
+            <div class="flex gap-3 px-4 py-3 bg-raised border-b border-edge border-l-4 border-l-warning">
+                <div class="text-ink">
                     {{ system_warning.message }}
                 </div>
                 {% if system_warning.ignore_url %}
-                <div class="ml-auto flex" title="Ignore"><form method="post" action="{{ system_warning.ignore_url }}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg></button></form></div>{# the button adds some undesired padding; leaving it for now #}
+                <div class="ml-auto flex" title="Ignore"><form method="post" action="{{ system_warning.ignore_url }}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button type="submit" class="rounded-full p-1 text-ink-muted hover:bg-raised hover:text-ink"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg></button></form></div>
                 {% endif %}
             </div>
             {% endfor %}
 
-            {% comment %} {# for use when we introduce a notification system #}
-            <div class="flex p-4 bg-yellow-100 dark:bg-amber-800 border-b-2 border-yellow-200 dark:border-yellow-700">
-                <div>
-                    Foo bar baz
-                </div>
-
-                <div class="ml-auto flex" title="Ignore">
-                    {# heroicon's x-circle #}
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-
-                </div>
-            </div>
-            {% endcomment %}
-
-            <div>
+            <div class="mx-auto w-full {% block container_width %}max-w-page{% endblock %}">
                 {% block content %}{% endblock %}
             </div>
         </div>
+    <script>
+      document.addEventListener('click', (event) => {
+        document.querySelectorAll('details.menu[open]').forEach((menu) => {
+          if (!menu.contains(event.target)) {
+            menu.removeAttribute('open');
+          }
+        });
+      });
+
+      document.querySelectorAll('.js-theme-toggle-btn').forEach((btn) => {
+        btn.closest('form').addEventListener('submit', (event) => {
+          const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+          event.currentTarget.querySelector('.js-theme-toggle-value').value = next;
+          document.documentElement.setAttribute('data-theme', next);
+        });
+      });
+    </script>
     {% block extra_js %}{% endblock %}
     </body>
 </html>

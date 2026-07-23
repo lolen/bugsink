@@ -8,9 +8,7 @@
 {% block content %}
 
 
-<div class="flex items-center justify-center">
-
-    <div class="m-4 max-w-4xl flex-auto">
+<div class="m-4">
         <form action="." method="post">
         {% csrf_token %}
 
@@ -24,11 +22,10 @@
 
         {% tailwind_formfield form.username %}
 
-        <button name="action" value="invite" class="font-bold text-slate-800 dark:text-slate-100 border-slate-500 dark:border-slate-400 pl-4 pr-4 pb-2 pt-2 border-2 bg-cyan-200 dark:bg-cyan-700 hover:bg-cyan-400 dark:hover:bg-cyan-600 active:ring-3 rounded-md">{% translate "Save" %}</button>
-        <a href="{% url "user_list" %}" class="text-cyan-500 dark:text-cyan-300 font-bold ml-2">{% translate "Cancel" %}</a>
+        <button name="action" value="invite" class="font-bold text-accent-ink border-accent h-9 px-3 text-sm inline-flex items-center justify-center border bg-accent hover:brightness-110 active:ring-3 rounded-md">{% translate "Save" %}</button>
+        <a href="{% url "user_list" %}" class="text-accent font-bold ml-2">{% translate "Cancel" %}</a>
         </form>
 
     </div>
-</div>
 
 {% endblock %}

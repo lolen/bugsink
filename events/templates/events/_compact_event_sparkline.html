@@ -1,16 +1,8 @@
-{% comment %}Compact 24h event-count sparkline for issue/project list rows.{% endcomment %}
 {% if event_sparkline %}
-<div title="{{ event_sparkline.title }}" class="w-24">
-    <div class="flex h-8 items-end gap-px">
-        {% for bucket in event_sparkline.event_buckets %}
-            <div title="{{ bucket.title }}" class="flex h-8 flex-1 items-end">
-                {% if bucket.count %}
-                    <div class="w-full bg-cyan-500" style="height: {{ bucket.pct }}%;"></div>
-                {% else %}
-                    <div class="h-0.5 w-full bg-slate-300 dark:bg-slate-500"></div>
-                {% endif %}
-            </div>
-        {% endfor %}
-    </div>
-</div>
+<svg class="block" width="88" height="24" viewBox="0 0 88 24" title="{{ event_sparkline.title }}">
+    <g transform="translate(0,24) scale(1,-1)">
+        <polyline class="fill-ink-muted/15" fill="currentColor" stroke="none" points="0,0 {% for bucket in event_sparkline.event_buckets %}{% widthratio forloop.counter0 23 88 %},{% widthratio bucket.pct 100 22 %} {% endfor %}88,0" />
+        <polyline class="stroke-ink-muted" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="{% for bucket in event_sparkline.event_buckets %}{% widthratio forloop.counter0 23 88 %},{% widthratio bucket.pct 100 22 %} {% endfor %}" />
+    </g>
+</svg>
 {% endif %}
