@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 # Determine whether the Tailwind build must run based on staged files.
-# Reads null-separated paths from stdin, compares against globs listed in theme/static_src/tailwind.config.js
+# Reads null-separated paths from stdin, compares against @source globs in theme/static_src/src/styles.css
 
+import os
 import pathlib
 import re
 import sys
@@ -64,50 +65,19 @@ def files_from_stdin():
 
 
 def parse_tailwind_config():
-    # tailwind.config.js is not JSON, so we can't use json.load().
-    # We extract the 'content: [...]' array with a regex,
-    # then pull all string literals using a regex.
-    # Any staged file under theme/static_src/ triggers a rebuild.
-
-    config_path = pathlib.Path("theme/static_src/tailwind.config.js")
-    text = config_path.read_text()
-
-    # Extract the 'content: [ ... ]' block.
-    match = re.search(r'content\s*:\s*\[(.*?)\]', text, re.DOTALL)
-    if not match:
-        raise RuntimeError("Could not find content array in Tailwind config")
-    raw_content_block = match.group(1)
-
-    string_literals = []
-
-    for line in raw_content_block.splitlines():
-        line = line.strip()
-        if not line or not line.startswith(("'", '"')):
-            continue
-
-        # Match a string at the start of the line
-        match = re.match(r'''(['"])(.*?)\1''', line)
-        if not match:
-            raise ValueError(f"Invalid quoted string: {line}")
-
-        string_literals.append(match.group(2))
-
-    return string_literals
+    # Extract all '@source "...";' string literals from styles.css.
+    css_path = pathlib.Path("theme/static_src/src/styles.css")
+    text = css_path.read_text()
+    return re.findall(r'@source\s+(["\'])(.*?)\1\s*;', text)
 
 
 def globs_from_string_literals(string_literals):
-    """Globs: resolve paths relative to the repo root instead of the config file."""
+    """Globs: resolve paths relative to the repo root instead of styles.css."""
 
-    result = []
-    for string_literal in string_literals:
-        if string_literal.startswith("../../"):
-            result.append(string_literal[6:])  # Remove '../../' prefix
-        elif string_literal.startswith("../"):
-            result.append("theme/" + string_literal[3:])
-        else:
-            result.append(string_literal)
-
-    return result
+    return [
+        os.path.normpath(os.path.join("theme/static_src/src", string_literal))
+        for _, string_literal in string_literals
+    ]
 
 
 def any_file_matches_globs(files, globs):

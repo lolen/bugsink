@@ -6,21 +6,17 @@
 
     {% for issuetags in issue.tags_all %}
 
-        <h1 id="{{ issuetags.0.key.key }}" class="text-2xl font-bold mt-4">{{ issuetags.0.key.key }}:</h1>
+        <h2 id="{{ issuetags.0.key.key }}" class="text-lg font-bold mt-6 mb-2">{{ issuetags.0.key.key }}</h2>
 
-        <div class="mb-6">
+        <div class="mb-6 border border-edge rounded-md overflow-hidden bg-surface">
             {% for issuetag in issuetags %}
-
-                <div class="flex {% if forloop.first %}border-slate-300 dark:border-slate-600 border-t-2{% endif %}">
-                    <div class="w-2/3 {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">{{ issuetag.value.value }}</div>
-                    <div class="w-1/6 pr-4 flex items-stretch {% if not forloop.last %}border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %}">
-                        <div class="bg-slate-200 dark:bg-slate-600" style="width: {{ issuetag.pct }}%;">
-                             <span class="absolute pl-1 whitespace-nowrap">
-                              {{ issuetag.pct }}%
-                            </span>
-                        </div>
+                <div class="flex items-center gap-4 px-4 py-2.5 {% if not forloop.last %}border-b border-edge-soft{% endif %}">
+                    <div class="w-1/3 truncate text-sm">{{ issuetag.value.value }}</div>
+                    <div class="flex-1 flex items-center gap-2">
+                        <div class="flex-1 h-1.5 bg-sunken rounded-full overflow-hidden"><div class="h-full bg-accent rounded-full" style="width: {{ issuetag.pct }}%"></div></div>
+                        <div class="w-10 shrink-0 text-right text-xs tabular-nums text-ink-muted">{{ issuetag.pct }}%</div>
                     </div>
-                    <div class="w-1/6 {% if not forloop.last %} border-b-2 border-dotted border-slate-300 dark:border-slate-600{% endif %} font-mono">{{ issuetag.count }} events</div>
+                    <div class="w-28 shrink-0 text-right text-xs tabular-nums text-ink-muted font-mono">{{ issuetag.count }} events</div>
                 </div>
             {% endfor %}
         </div>
