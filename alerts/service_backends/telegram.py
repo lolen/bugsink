@@ -101,13 +101,14 @@ def _safe_html(text):
     return html.escape(text)
 
 
-def _store_failure_info(service_config_id, exception, response=None, bot_token=None):
-    """Store failure information in the MessagingServiceConfig with immediate_atomic"""
-    from alerts.models import MessagingServiceConfig
+def _store_failure_info(service_config_id, exception, response=None, bot_token=None, config_kind="project"):
+    """Store failure information in the MessagingServiceConfig (or TeamMessagingServiceConfig) with immediate_atomic"""
+    from alerts.models import get_service_config_model
+    config_model = get_service_config_model(config_kind)
 
     with immediate_atomic(only_if_needed=True):
         try:
-            config = MessagingServiceConfig.objects.get(id=service_config_id)
+            config = config_model.objects.get(id=service_config_id)
 
             error_message = str(exception)
             if bot_token:
@@ -139,21 +140,22 @@ def _store_failure_info(service_config_id, exception, response=None, bot_token=N
                 config.last_failure_is_json = None
 
             config.save()
-        except MessagingServiceConfig.DoesNotExist:
+        except config_model.DoesNotExist:
             # Config was deleted while task was running
             pass
 
 
-def _store_success_info(service_config_id):
+def _store_success_info(service_config_id, config_kind="project"):
     """Clear failure information on successful operation"""
-    from alerts.models import MessagingServiceConfig
+    from alerts.models import get_service_config_model
+    config_model = get_service_config_model(config_kind)
 
     with immediate_atomic(only_if_needed=True):
         try:
-            config = MessagingServiceConfig.objects.get(id=service_config_id)
+            config = config_model.objects.get(id=service_config_id)
             config.clear_failure_status()
             config.save()
-        except MessagingServiceConfig.DoesNotExist:
+        except config_model.DoesNotExist:
             # Config was deleted while task was running
             pass
 
@@ -183,7 +185,8 @@ def _build_alert_message(issue, alert_reason, issue_url, unmute_reason=None):
 
 @shared_task
 def telegram_backend_send_test_message(
-    webhook_url, bot_token, chat_id, project_name, display_name, service_config_id, message_thread_id=None
+    webhook_url, bot_token, chat_id, project_name, display_name, service_config_id, message_thread_id=None,
+    config_kind="project"
 ):
     data = {
         "chat_id": chat_id,
@@ -203,13 +206,13 @@ def telegram_backend_send_test_message(
 
         result.raise_for_status()
 
-        _store_success_info(service_config_id)
+        _store_success_info(service_config_id, config_kind)
     except requests.RequestException as e:
         response = getattr(e, "response", None)
-        _store_failure_info(service_config_id, e, response, bot_token)
+        _store_failure_info(service_config_id, e, response, bot_token, config_kind)
 
     except Exception as e:
-        _store_failure_info(service_config_id, e, bot_token=bot_token)
+        _store_failure_info(service_config_id, e, bot_token=bot_token, config_kind=config_kind)
 
 
 @shared_task
@@ -224,6 +227,7 @@ def telegram_backend_send_alert(
     service_config_id,
     unmute_reason=None,
     message_thread_id=None,
+    config_kind="project",
 ):
 
     issue = Issue.objects.get(id=issue_id)
@@ -248,13 +252,13 @@ def telegram_backend_send_alert(
 
         result.raise_for_status()
 
-        _store_success_info(service_config_id)
+        _store_success_info(service_config_id, config_kind)
     except requests.RequestException as e:
         response = getattr(e, "response", None)
-        _store_failure_info(service_config_id, e, response, bot_token)
+        _store_failure_info(service_config_id, e, response, bot_token, config_kind)
 
     except Exception as e:
-        _store_failure_info(service_config_id, e, bot_token=bot_token)
+        _store_failure_info(service_config_id, e, bot_token=bot_token, config_kind=config_kind)
 
 
 class TelegramBackend(BaseWebhookBackend):
@@ -272,10 +276,11 @@ class TelegramBackend(BaseWebhookBackend):
             _build_webhook_url(bot_token),
             bot_token,
             config["chat_id"],
-            self.service_config.project.name,
+            self.service_config.display_scope_name(),
             self.service_config.display_name,
             self.service_config.id,
             message_thread_id=config.get("message_thread_id"),
+            config_kind=self.service_config.CONFIG_KIND,
         )
 
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
@@ -291,5 +296,6 @@ class TelegramBackend(BaseWebhookBackend):
             alert_reason,
             self.service_config.id,
             message_thread_id=config.get("message_thread_id"),
+            config_kind=self.service_config.CONFIG_KIND,
             **kwargs,
         )
