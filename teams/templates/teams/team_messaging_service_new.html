@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% load static %}
+{% load tailwind_forms %}
+{% load i18n %}
+
+{% block title %}{% translate "Messaging Service" %} · {{ team.name }} · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+<div class="m-4">
+        <form action="." method="post">
+        {% csrf_token %}
+
+        {% if messages %}
+        <ul>
+            {% for message in messages %}
+                {# if we introduce different levels we can use{% message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %} #}
+                <li class="bg-raised border border-edge border-l-4 border-l-accent rounded-md p-4 text-sm">{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        <div>
+            <h1 class="text-4xl my-4 font-bold">{% translate "Messaging Service" %} · {{ team.name }}</h1>
+        </div>
+
+        {% for field in form %}
+            {% if field.name != "projects" and field.name != "auto_add_new_projects" %}
+                {% tailwind_formfield field %}
+            {% endif %}
+        {% endfor %}
+
+        {% for config_form_kind, config_form in config_forms.items %}
+            <div
+                class="config-form-block {% if config_form_kind == selected_config_form_kind %}block{% else %}hidden{% endif %}" data-config-kind="{{ config_form_kind }}">
+
+                {% for field in config_form %}
+                    {% tailwind_formfield field %}
+                {% endfor %}
+            </div>
+        {% endfor %}
+
+        <div class="text-lg mb-6 md:mb-8">
+            <div class="text-ink font-bold">{{ form.projects.label }}:</div>
+            <div class="mt-2 space-y-1">
+                {% for checkbox in form.projects %}
+                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                    {{ checkbox.tag }}
+                    <span>{{ checkbox.choice_label }}</span>
+                </label>
+                {% empty %}
+                <div class="text-sm text-ink-dim italic">{% translate "This team has no projects yet." %}</div>
+                {% endfor %}
+            </div>
+            {% if form.projects.errors %}
+                {% for error in form.projects.errors %}
+                <div class="text-critical pt-1 px-2 text-sm">{{ error }}</div>
+                {% endfor %}
+            {% elif form.projects.help_text %}
+                <div class="text-ink-muted pt-1 px-2 text-sm">{{ form.projects.help_text|safe }}</div>
+            {% endif %}
+
+            <label class="flex items-center gap-2 text-sm text-ink-muted cursor-pointer mt-4 pt-4 border-t border-edge-soft">
+                {{ form.auto_add_new_projects }}
+                <span>{{ form.auto_add_new_projects.label }}</span>
+            </label>
+        </div>
+
+        <button name="action" value="add" class="font-bold text-accent-ink border-accent h-9 px-3 text-sm inline-flex items-center justify-center border bg-accent hover:brightness-110 active:ring-3 rounded-md">Save</button>
+        <a href="{% url "team_alerts_setup" team_pk=team.pk %}" class="font-bold text-ink-muted ml-4">Cancel</a>
+
+        </form>
+
+    </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const kindSelect = document.querySelector('select[name="kind"]');
+    const blocks = document.querySelectorAll('.config-form-block');
+
+    function updateConfigForms() {
+        const selectedKind = kindSelect.value;
+
+        blocks.forEach(block => {
+            const blockKind = block.dataset.configKind;
+            const isActive = (blockKind === selectedKind);
+
+            block.classList.toggle('hidden', !isActive);
+            block.classList.toggle('block', isActive);
+            block.querySelectorAll('input, select, textarea, button').forEach(element => {
+                element.disabled = !isActive;
+            });
+        });
+    }
+
+    updateConfigForms();  // Initialize on page load
+
+    kindSelect.addEventListener('change', updateConfigForms);
+});
+</script>
+{% endblock %}

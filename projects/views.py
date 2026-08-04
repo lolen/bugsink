@@ -20,7 +20,9 @@ from bugsink.decorators import login_exempt, atomic_for_request_method
 from bugsink.invite_links import email_not_sent_invite_link_notice, manual_invite_link_notice
 from bugsink.utils import assert_, email_backend_delivers_mail
 
-from alerts.models import MessagingServiceConfig, get_alert_service_backend_class, get_alert_service_kind_choices
+from alerts.models import (
+    MessagingServiceConfig, TeamMessagingServiceConfig, get_alert_service_backend_class,
+    get_alert_service_kind_choices)
 from alerts.forms import MessagingServiceConfigNewForm, MessagingServiceConfigEditForm
 from events.sparklines import get_project_list_event_sparklines
 from phonehome.utils import phone_home
@@ -528,10 +530,26 @@ def project_alerts_setup(request, project_pk):
             service_backend.send_test_message()
             messages.success(
                 request, "Test message sent; check the configured service to see if it arrived.")
+        elif action == "remove_team":
+            # unlinks this project from a team-level service; the service itself (and its effect on other projects
+            # in the team) is untouched, since removal here is scoped to project.team_id
+            team_service = TeamMessagingServiceConfig.objects.get(team_id=project.team_id, id=service_id)
+            team_service.projects.remove(project)
+            messages.success(request, "Removed this project from the team messaging service.")
+        elif action == "test_team":
+            team_service = TeamMessagingServiceConfig.objects.get(
+                team_id=project.team_id, id=service_id, projects=project)
+            service_backend = team_service.get_backend()
+            service_backend.send_test_message()
+            messages.success(
+                request, "Test message sent; check the configured service to see if it arrived.")
 
     return render(request, 'projects/project_alerts_setup.html', {
         'project': project,
         'service_configs': project.service_configs.all(),
+        'team_service_configs': (
+            TeamMessagingServiceConfig.objects.filter(team_id=project.team_id, projects=project)
+            if project.team_id else TeamMessagingServiceConfig.objects.none()),
     })
 
 

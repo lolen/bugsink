@@ -54,3 +54,4 @@ node_modules
 
 # Docker artifacts
 /bugsink*tar
+compose.yml
