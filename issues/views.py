@@ -4,7 +4,7 @@ import logging
 
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import HttpResponseRedirect, HttpResponseNotAllowed, HttpResponse
+from django.http import HttpResponseRedirect, HttpResponseNotAllowed, HttpResponse, JsonResponse
 from django.utils.http import content_disposition_header
 from django.urls import reverse
 from django.core.exceptions import PermissionDenied
@@ -29,6 +29,8 @@ from events.ua_stuff import get_contexts_enriched_with_ua
 
 from projects.models import ProjectMembership, get_issue_accessible_project_ids
 from tags.search import search_issues, search_events, search_events_optimized
+from tags.models import TagKey, TagValue
+from tags.utils import STANDARD_TAG_KEYS
 from theme.templatetags.issues import timestamp_with_millis
 
 from .models import (
@@ -299,6 +301,29 @@ def _global_issue_list_pt_2(request, accessible_project_ids, state_filter, unapp
         "sort": sort,
         "page_obj": page_obj,
     })
+
+
+@atomic_for_request_method
+@project_membership_required
+def tag_suggestions(request, project):
+    # Backs the autocomplete on the issue-list search box. Two modes: no `key` yet (suggest tag keys, standard ones
+    # first) or a `key` already typed (suggest that key's values). Kept intentionally simple (prefix match, small
+    # limits) since this is a "type a couple of characters and see options" helper, not a full search-as-you-go.
+    prefix = request.GET.get("prefix", "")
+    key = request.GET.get("key", "")
+
+    if key:
+        values = list(
+            TagValue.objects.filter(key__project=project, key__key=key, value__istartswith=prefix)
+            .order_by("value").values_list("value", flat=True)[:20])
+        return JsonResponse({"values": values})
+
+    keys = list(
+        TagKey.objects.filter(project=project, key__istartswith=prefix)
+        .order_by("key").values_list("key", flat=True)[:50])
+    standard_matches = [k for k in STANDARD_TAG_KEYS if k.startswith(prefix) and k in keys]
+    rest = [k for k in keys if k not in standard_matches]
+    return JsonResponse({"keys": (standard_matches + rest)[:20]})
 
 
 def event_by_id(request, event_pk):

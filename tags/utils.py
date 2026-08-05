@@ -52,6 +52,21 @@ CONTEXT_CONVERSION_TABLE = {
 }
 
 
+# Not a formal/enforced concept (deduced and custom tags are stored identically, see module docstring in
+# tags/models.py) -- just the keys we point people to in the search UI, since they're the ones deduce_tags() always
+# tries to populate (as opposed to arbitrary SDK-supplied tags, which vary per project).
+STANDARD_TAG_KEYS = [
+    "environment",
+    "release",
+    "server_name",
+    "transaction",
+    "browser",
+    "os",
+    "user",
+    "handled",
+]
+
+
 def deduce_user_tags(event_data):
     # we don't try to mimick Sentry's full behavior, instead just pick the most relevant piece of the user context that
     # we can find, and put the rest in dotted paths. It's simple, easy to explain, and we're not aiming for Sentry

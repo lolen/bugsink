@@ -2,6 +2,8 @@
 {% load static %}
 {% load stricter_templates %}
 {% load humanize %}
+{% load issues %}
+{% load i18n %}
 
 {% block tab_content %}
 
@@ -52,9 +54,12 @@
     {% if event.get_tags %}
         <div class="px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-ink-muted bg-raised border-b border-t border-edge" id="tags">Tags</div>
         {% for tag in event.get_tags %}
-            <div class="flex gap-4 px-4 py-2 {% if not forloop.last %}border-b border-edge-soft{% endif %}">
+            <div class="flex items-start gap-4 px-4 py-2 {% if not forloop.last %}border-b border-edge-soft{% endif %}">
                 <div class="w-1/4 shrink-0 break-words text-sm font-bold text-ink-muted">{{ tag.value.key.key }}</div>
                 <div class="flex-1 min-w-0 break-words font-mono text-sm">{{ tag.value.value|linebreaks }}</div>
+                <a href="{% url "issue_list_all" project_pk=project.id %}?{{ tag.value.key.key|tag_search_q:tag.value.value }}" class="shrink-0 mt-0.5 text-ink-muted hover:text-ink" title="{% translate "Search issues with this tag" %}">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                </a>
             </div>
         {% endfor %}
     {% endif %}

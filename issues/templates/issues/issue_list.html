@@ -81,7 +81,13 @@
     {% if not is_global_issue_list %}
     <div class="ml-auto relative">
         <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input form="issueSearchForm" type="text" name="q" value="{{ q }}" placeholder="{% translate 'Search issues...' %}" class="bg-surface border-edge text-sm h-9 pl-9 pr-3 py-0 w-64 focus:border-accent focus:ring-accent-wash rounded-md"/>
+        <input
+            id="issue-search-input" form="issueSearchForm" type="text" name="q" value="{{ q }}"
+            placeholder="{% translate 'Search issues...' %}"
+            title="{% translate 'Search exception text, or filter by tag, e.g. environment:production' %}"
+            autocomplete="off" data-suggest-url="{% url "tag_suggestions" project_pk=project.id %}"
+            class="bg-surface border-edge text-sm h-9 pl-9 pr-3 py-0 w-64 focus:border-accent focus:ring-accent-wash rounded-md"/>
+        <div id="issue-search-suggestions" class="hidden absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto bg-surface border border-edge rounded-md shadow-lg text-sm"></div>
     </div>
     {% endif %}
 
