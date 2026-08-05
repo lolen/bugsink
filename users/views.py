@@ -266,6 +266,19 @@ def set_theme(request):
 
 
 @atomic_for_request_method
+@login_required
+def set_group_projects_by_team(request):
+    if request.method == 'POST':
+        request.user.group_projects_by_team = request.POST.get('group_projects_by_team') == 'on'
+        request.user.save(update_fields=['group_projects_by_team'])
+
+    next_url = request.POST.get('next')
+    if not next_url or not is_safe_next_url(next_url, request):
+        next_url = '/'
+    return redirect(next_url)
+
+
+@atomic_for_request_method
 # in the general case this is done by Middleware but we're under /accounts/, so we need it back.
 # not security-critical because we simply get a failure on request.user if this wasn't there, but still the right thing.
 @login_required

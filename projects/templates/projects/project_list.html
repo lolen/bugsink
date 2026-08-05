@@ -37,6 +37,20 @@
     <a href="{% url "project_list_other" %}" class="px-3 py-1 rounded-md text-sm {% if ownership_filter == "other" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Other Projects" %}</a>
     {% endif %}
     </div>
+
+    {% if not app_settings.SINGLE_TEAM %}
+    <form method="post" action="{% url 'set_group_projects_by_team' %}" class="ml-auto">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <label class="flex items-center gap-2 text-sm text-ink-muted cursor-pointer">
+            <input
+                type="checkbox" name="group_projects_by_team" onchange="this.form.submit()"
+                {% if request.user.group_projects_by_team %}checked{% endif %}
+                class="rounded-sm bg-surface border-edge checked:bg-accent checked:border-accent text-accent focus:ring-accent-wash cursor-pointer">
+            {% translate "Group by team" %}
+        </label>
+    </form>
+    {% endif %}
 </div>
 
     <div class="mt-3 border border-edge rounded-md overflow-hidden shadow-sm">
@@ -46,128 +60,34 @@
 
       <table class="w-full">
       <tbody>
-            {% for project in project_list %}
-            <tr class="bg-surface border-b border-edge-soft hover:bg-raised last:border-b-0">
-            <td class="w-full py-3 px-4 pr-12">
-                <div class="flex items-end gap-4">
-                <div class="min-w-0 flex-1">
-                <div>
-                    {% if project.member or request.user.is_superuser %}
-                    <a href="{{ script_prefix }}/issues/{{ project.id }}" class="text-sm text-accent font-bold">{{ project.name }}</a>
-                    {% else %}
-                    <span class="text-sm text-ink font-bold">{{ project.name }}</span>
-                    {% endif %}
-                </div>
-                <div class="text-xs text-ink-muted mt-0.5">
-                    {{ project.team.name }}
-                    | {{ project.member_count }} {% translate "members" %}
-                    {% if project.open_issue_count != None %}
-                    | {{ project.open_issue_count }} {% translate "open issues" %}
-                    {% else %}
-                    | {% translate "many issues" %}
-                    {% endif %}
-                    {% if project.member %}
-                    | <a href="{% url 'project_member_settings' project_pk=project.id user_pk=request.user.id %}" class="font-bold text-accent">{% translate "my settings" %}</a>
-                    {% endif %}
-                </div>
-                </div>
-                <div class="flex-none">
-                    {% include "events/_compact_event_sparkline.html" with event_sparkline=project.list_sparkline %}
-                </div>
-                </div>
-            </td>
-
-            <td class="py-3 pr-2 text-center">
-                {% if project.member %}
-                    {% if not project.member.accepted %}
-                    <span class="bg-raised rounded-full border border-edge px-2 py-0.5 ml-2 text-xs whitespace-nowrap">{% translate "You're&nbsp;invited!" %}</span>
-                    {% elif project.member.is_admin %}
-                    <span class="bg-accent-wash rounded-full border border-edge px-2 py-0.5 ml-2 text-xs whitespace-nowrap">{% translate "Admin" %}</span>
-                    {% endif %}
-                {% endif %}
-            </td>
-
-            <td class="py-3 pr-1">
-                {% if not app_settings.SINGLE_USER %}{% if project.member.is_admin or request.user.is_superuser %}
-                <div class="rounded-full hover:bg-raised p-2 cursor-pointer text-ink-muted hover:text-ink" onclick="followContainedLink(this);" title="Project members">
-                    <a href="{% url 'project_members' project_pk=project.id %}">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
-    </svg>
-                    </a>
-                </div>
-                {% endif %}{% endif %}
-            </td>
-
-            <td class="py-3 pr-1">
-                {% if project.member.is_admin or request.user.is_superuser %}
-                <div class="rounded-full hover:bg-raised p-2 cursor-pointer text-ink-muted hover:text-ink" onclick="followContainedLink(this);" title="Project settings">
-                    <a href="{% url 'project_edit' project_pk=project.id %}">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                        </svg>
-                    </a>
-                </div>
-                {% endif %}
-            </td>
-
-            <td class="py-3 pr-1">
-                {% if project.member or request.user.is_superuser %}
-                <div class="rounded-full hover:bg-raised p-2 cursor-pointer text-ink-muted hover:text-ink" onclick="followContainedLink(this);" title="Alerting Settings">
-                    <a href="{% url 'project_alerts_setup' project_pk=project.id %}">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 1 1 0-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 0 1-1.44-4.282m3.102.069a18.03 18.03 0 0 1-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 0 1 8.835 2.535M10.34 6.66a23.847 23.847 0 0 0 8.835-2.535m0 0A23.74 23.74 0 0 0 18.795 3m.38 1.125a23.91 23.91 0 0 1 1.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 0 0 1.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 0 1 0 3.46" />
-                    </svg>
-                    </a>
-                </div>
-                {% endif %}
-            </td>
-
-            <td class="py-3 pr-1">
-                {% if project.member or request.user.is_superuser %}
-                <div class="rounded-full hover:bg-raised p-2 cursor-pointer text-ink-muted hover:text-ink" onclick="followContainedLink(this);" title="SDK setup (connect app)">
-                    <a href="{% url 'project_sdk_setup' project_pk=project.id %}">
-                        <svg fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="size-5">
-                            <path d="M202.7,259.7l-31.5,31.5c-5.6,5.6-8.6,13-8.6,20.9c0,7.9,3.1,15.3,8.6,20.9l6.1,6.1l-3.7,3.7c-11.1,11.1-29.2,11.1-40.4,0
-                                l-31.4-31.4c-20.7-20.7-54.3-20.7-75,0c-20.7,20.7-20.7,54.3,0,75l31.4,31.5c5.4,5.4,8.4,12.6,8.4,20.2s-3,14.8-8.4,20.2
-                                c-4.8,4.8-4.8,12.5,0,17.3c2.4,2.4,5.5,3.6,8.7,3.6c3.1,0,6.3-1.2,8.7-3.6c10-10,15.5-23.3,15.5-37.5s-5.5-27.5-15.5-37.5
-                                l-31.4-31.5c-11.1-11.1-11.1-29.2,0-40.4s29.2-11.1,40.4,0L116,360c20.7,20.7,54.3,20.7,75,0l3.7-3.7l6.1,6.1
-                                c5.8,5.8,13.3,8.6,20.9,8.6c7.6,0,15.1-2.9,20.9-8.6l31.5-31.5c11.4,3.7,23.2,5.7,35,5.7c28.7,0,57.4-10.9,79.2-32.7l55.1-55.1
-                                l9.9,9.9c2.4,2.4,5.5,3.6,8.7,3.6s6.3-1.2,8.7-3.6c4.8-4.8,4.8-12.5,0-17.3l-40.5-40.5l67-67c4.8-4.8,4.8-12.5,0-17.3
-                                c-4.8-4.8-12.5-4.8-17.3,0l-67,67L350.2,121l67-67c4.8-4.8,4.8-12.5,0-17.3c-4.8-4.8-12.5-4.8-17.3,0l-67,67l-40.5-40.5
-                                c-4.8-4.8-12.5-4.8-17.3,0c-4.8,4.8-4.8,12.5,0,17.3l9.9,9.9l-55.1,55.1C199,176.4,190,220.8,202.7,259.7z M247.1,286.6
-                                c-34.1-34.1-34.1-89.6,0-123.7l55.1-55.1L426,231.4l-55.1,55.1C336.7,320.7,281.2,320.7,247.1,286.6z M213.7,283.4
-                                c4.5,7.3,9.8,14.2,16.1,20.5s13.2,11.6,20.5,16.1l-25.2,25.2c-1.9,2-5.1,2-7.1,0l-29.5-29.5c-1.3-1.3-1.5-2.8-1.5-3.5
-                                c0-0.8,0.2-2.3,1.5-3.5L213.7,283.4z"/>
-                        </svg>
-                    </a>
-                </div>
-                {% endif %}
-            </td>
-
-            <td class="py-3 pr-4">
-                {% if project.member %}
-                    {% if not project.member.accepted %}
-                        <a href="{% url 'project_members_accept' project_pk=project.id %}" class="font-bold text-accent whitespace-nowrap text-sm">{% translate "Invitation" %}</a>
-                    {% else %}
-                        <button name="action" value="leave:{{ project.id }}" class="font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center border hover:bg-raised active:ring-3 rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
-                    {% endif %}
-                {% else %}
-                    {% if ownership_filter == "teams" or project.is_joinable or request.user.is_superuser %}
-                        <button name="action" value="join:{{ project.id }}" class="font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center border hover:bg-raised active:ring-3 rounded-md whitespace-nowrap">{% translate "Join" %}</button>
-                    {% endif %}
-                {% endif %}
-            </td>
-
-            </tr>
-            {% empty %}
-            <tr class="bg-surface">
-            <td class="w-full p-4 text-sm text-ink-muted">
-                {% translate "No projects found." %}
-            </td>
-            </tr>
-            {% endfor %}
+            {% if grouped_project_list is not None %}
+                {% for team, team_projects in grouped_project_list %}
+                <tr class="bg-raised border-b border-edge-soft">
+                    <td colspan="7" class="px-4 py-2 text-xs font-bold uppercase tracking-wide text-ink-muted">
+                        {% if team %}{{ team.name }}{% else %}{% translate "No Team" %}{% endif %}
+                    </td>
+                </tr>
+                {% for project in team_projects %}
+                    {% include "projects/_project_list_row.html" %}
+                {% endfor %}
+                {% empty %}
+                <tr class="bg-surface">
+                <td class="w-full p-4 text-sm text-ink-muted">
+                    {% translate "No projects found." %}
+                </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                {% for project in project_list %}
+                    {% include "projects/_project_list_row.html" %}
+                {% empty %}
+                <tr class="bg-surface">
+                <td class="w-full p-4 text-sm text-ink-muted">
+                    {% translate "No projects found." %}
+                </td>
+                </tr>
+                {% endfor %}
+            {% endif %}
         </tbody>
         </table>
 

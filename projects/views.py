@@ -143,11 +143,20 @@ def project_list(request, ownership_filter=None):
             project_list_2.append(project)
         project_list = project_list_2
 
+    grouped_project_list = None
+    if request.user.group_projects_by_team:
+        projects_by_team = {}
+        for project in project_list:
+            projects_by_team.setdefault(project.team, []).append(project)
+        grouped_project_list = sorted(
+            projects_by_team.items(), key=lambda kv: (kv[0] is None, kv[0].name if kv[0] else ""))
+
     return render(request, 'projects/project_list.html', {
         'can_create':
             request.user.is_superuser or TeamMembership.objects.filter(user=request.user, role=TeamRole.ADMIN).exists(),
         'ownership_filter': ownership_filter,
         'project_list': project_list,
+        'grouped_project_list': grouped_project_list,
     })
 
 

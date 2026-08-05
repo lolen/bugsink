@@ -32,6 +32,7 @@ class User(AbstractUser):
     # If we ever allow login with an unconfirmed email address, split that state into an explicit field.
 
     send_email_alerts = models.BooleanField(default=True, blank=True)
+    group_projects_by_team = models.BooleanField(default=True, blank=True)
 
     THEME_CHOICES = [
         ("system", _("System Default")),
