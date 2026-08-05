@@ -1,8 +1,10 @@
 {% if event_sparkline %}
 <svg class="block" width="88" height="24" viewBox="0 0 88 24" title="{{ event_sparkline.title }}">
+    {% if event_sparkline.total > 0 %}
     <g transform="translate(0,24) scale(1,-1)">
         <polyline class="fill-ink-muted/15" fill="currentColor" stroke="none" points="0,0 {% for bucket in event_sparkline.event_buckets %}{% widthratio forloop.counter0 23 88 %},{% widthratio bucket.pct 100 22 %} {% endfor %}88,0" />
         <polyline class="stroke-ink-muted" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="{% for bucket in event_sparkline.event_buckets %}{% widthratio forloop.counter0 23 88 %},{% widthratio bucket.pct 100 22 %} {% endfor %}" />
     </g>
+    {% endif %}
 </svg>
 {% endif %}
