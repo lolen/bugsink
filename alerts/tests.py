@@ -24,6 +24,14 @@ from .service_backends.mattermost import MattermostConfigForm
 from .service_backends.msteams import msteams_backend_send_test_message, msteams_backend_send_alert
 from .service_backends.msteams import MsTeamsConfigForm
 from .service_backends.slack import SlackConfigForm
+from .service_backends.telegram import (
+    MASKED,
+    TelegramBackend,
+    TelegramConfigForm,
+    telegram_backend_send_alert,
+    telegram_backend_send_test_message,
+)
+from .service_backends.custom import CustomBackendForm, custom_backend_send_test_message, custom_backend_send_alert
 from .service_backends.webhook_security import validate_webhook_url
 from .tasks import send_new_issue_alert, send_regression_alert, send_unmute_alert, _get_users_for_email_alert
 from .views import DEBUG_CONTEXTS
@@ -582,6 +590,401 @@ class TestMsTeamsBackend(DjangoTestCase):
         self.assertEqual(self.config.last_failure_error_type, "HTTPError")
 
 
+class TestTelegramBackend(DjangoTestCase):
+    def setUp(self):
+        self.project = Project.objects.create(name="Test project")
+        self.bot_token = "123456:ABCdef_test_token"
+        self.chat_id = "-1001234567890"
+        self.config = MessagingServiceConfig.objects.create(
+            project=self.project,
+            display_name="Test Telegram",
+            kind="telegram",
+            config=json.dumps(
+                {
+                    "bot_token": self.bot_token,
+                    "chat_id": self.chat_id,
+                    "message_thread_id": 123,
+                }
+            ),
+        )
+
+    def test_backend_class_is_registered(self):
+        self.assertIsInstance(self.config.get_backend(), TelegramBackend)
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_telegram_test_message_success_clears_failure_status(self, mock_post):
+        self.config.last_failure_timestamp = timezone.now()
+        self.config.last_failure_status_code = 500
+        self.config.last_failure_response_text = "Server Error"
+        self.config.save()
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        telegram_backend_send_test_message(
+            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
+            self.bot_token,
+            self.chat_id,
+            "Test project",
+            "Test Telegram",
+            self.config.id,
+            message_thread_id=123,
+        )
+
+        self.config.refresh_from_db()
+        self.assertIsNone(self.config.last_failure_timestamp)
+        self.assertIsNone(self.config.last_failure_status_code)
+        self.assertIsNone(self.config.last_failure_response_text)
+
+        mock_post.assert_called_once()
+        self.assertIn(f"/bot{self.bot_token}/sendMessage", mock_post.call_args.args[0])
+        payload = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertEqual(payload["chat_id"], self.chat_id)
+        self.assertEqual(payload["message_thread_id"], 123)
+        self.assertEqual(payload["parse_mode"], "HTML")
+        self.assertIn("Test message by Bugsink", payload["text"])
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_telegram_alert_success_clears_failure_status(self, mock_post):
+        self.config.last_failure_timestamp = timezone.now()
+        self.config.last_failure_status_code = 500
+        self.config.save()
+        issue, _ = get_or_create_issue(project=self.project)
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        telegram_backend_send_alert(
+            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
+            self.bot_token,
+            self.chat_id,
+            issue.id,
+            "New issue",
+            "a",
+            "NEW",
+            self.config.id,
+            unmute_reason="Repeated failures after being muted.",
+            message_thread_id=123,
+        )
+
+        self.config.refresh_from_db()
+        self.assertIsNone(self.config.last_failure_timestamp)
+
+        payload = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertEqual(payload["message_thread_id"], 123)
+        self.assertIn("<b>Project:</b>", payload["text"])
+        self.assertIn("View on Bugsink", payload["text"])
+        self.assertIn("Repeated failures after being muted.", payload["text"])
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_telegram_http_error_masks_token_in_failure_details(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 401
+        mock_response.text = json.dumps(
+            {
+                "ok": False,
+                "description": f"Bad request for token {self.bot_token}",
+            }
+        )
+
+        http_error = requests.HTTPError(
+            f"401 Client Error: Unauthorized for url: https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        )
+        http_error.response = mock_response
+        mock_response.raise_for_status.side_effect = http_error
+        mock_post.return_value = mock_response
+
+        telegram_backend_send_test_message(
+            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
+            self.bot_token,
+            self.chat_id,
+            "Test project",
+            "Test Telegram",
+            self.config.id,
+        )
+
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.last_failure_status_code, 401)
+        self.assertEqual(self.config.last_failure_error_type, "HTTPError")
+        self.assertIn(MASKED, self.config.last_failure_error_message)
+        self.assertNotIn(self.bot_token, self.config.last_failure_error_message)
+        self.assertIn(MASKED, self.config.last_failure_response_text)
+        self.assertNotIn(self.bot_token, self.config.last_failure_response_text)
+        self.assertTrue(self.config.last_failure_is_json)
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_telegram_connection_error_masks_token_in_failure_details(self, mock_post):
+        mock_post.side_effect = requests.ConnectionError(
+            f"HTTPSConnectionPool(host='api.telegram.org', port=443): "
+            f"Max retries exceeded with url: /bot{self.bot_token}/sendMessage"
+        )
+
+        telegram_backend_send_test_message(
+            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
+            self.bot_token,
+            self.chat_id,
+            "Test project",
+            "Test Telegram",
+            self.config.id,
+        )
+
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.last_failure_error_type, "ConnectionError")
+        self.assertIn(MASKED, self.config.last_failure_error_message)
+        self.assertNotIn(self.bot_token, self.config.last_failure_error_message)
+
+    @patch("alerts.service_backends.base.requests.post")
+    def test_telegram_send_uses_outbound_policy(self, mock_post):
+        with override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="allowlist_only", ALERTS_WEBHOOK_ALLOW_LIST=[]):
+            telegram_backend_send_test_message(
+                f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
+                self.bot_token,
+                self.chat_id,
+                "Test project",
+                "Test Telegram",
+                self.config.id,
+            )
+
+        mock_post.assert_not_called()
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.last_failure_error_type, "ValueError")
+        self.assertIn("not allowlisted", self.config.last_failure_error_message)
+        self.assertNotIn(self.bot_token, self.config.last_failure_error_message)
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_telegram_test_message_omits_thread_id_when_not_set(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        telegram_backend_send_test_message(
+            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
+            self.bot_token,
+            self.chat_id,
+            "Test project",
+            "Test Telegram",
+            self.config.id,
+        )
+
+        payload = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertNotIn("message_thread_id", payload)
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_telegram_test_message_omits_thread_id_for_channel_username(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        telegram_backend_send_test_message(
+            f"https://api.telegram.org/bot{self.bot_token}/sendMessage",
+            self.bot_token,
+            "@my_channel",
+            "Test project",
+            "Test Telegram",
+            self.config.id,
+            message_thread_id=123,
+        )
+
+        payload = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertNotIn("message_thread_id", payload)
+
+
+class TestCustomBackendErrorHandling(DjangoTestCase):
+    def setUp(self):
+        self.project = Project.objects.create(name="Test project")
+        self.config = MessagingServiceConfig.objects.create(
+            project=self.project,
+            display_name="Test Custom",
+            kind="custom",
+            config=json.dumps({"webhook_url": "https://hooks.example.com/test"}),
+        )
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_custom_test_message_success_clears_failure_status(self, mock_post):
+        # Set up existing failure status
+        self.config.last_failure_timestamp = timezone.now()
+        self.config.last_failure_status_code = 500
+        self.config.last_failure_response_text = "Server Error"
+        self.config.save()
+
+        # Mock successful response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        # Send test message
+        custom_backend_send_test_message(
+            "https://hooks.example.com/test",
+            "Test project",
+            "Test Custom",
+            self.config.id
+        )
+
+        # Verify failure status was cleared
+        self.config.refresh_from_db()
+        self.assertIsNone(self.config.last_failure_timestamp)
+        self.assertIsNone(self.config.last_failure_status_code)
+        self.assertIsNone(self.config.last_failure_response_text)
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_custom_test_message_http_error_stores_failure(self, mock_post):
+        # Mock HTTP error response
+        mock_response = Mock()
+        mock_response.status_code = 404
+        mock_response.text = '{"error": "not_found"}'
+
+        # Create the HTTPError with response attached
+        http_error = requests.HTTPError()
+        http_error.response = mock_response
+        mock_response.raise_for_status.side_effect = http_error
+
+        mock_post.return_value = mock_response
+
+        # Send test message
+        custom_backend_send_test_message(
+            "https://hooks.example.com/test",
+            "Test project",
+            "Test Custom",
+            self.config.id
+        )
+
+        # Verify failure status was stored
+        self.config.refresh_from_db()
+        self.assertIsNotNone(self.config.last_failure_timestamp)
+        self.assertEqual(self.config.last_failure_status_code, 404)
+        self.assertEqual(self.config.last_failure_response_text, '{"error": "not_found"}')
+        self.assertTrue(self.config.last_failure_is_json)
+        self.assertEqual(self.config.last_failure_error_type, "HTTPError")
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_custom_test_message_non_json_error_stores_failure(self, mock_post):
+        # Mock HTTP error response with non-JSON text
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.text = 'Internal Server Error'
+
+        # Create the HTTPError with response attached
+        http_error = requests.HTTPError()
+        http_error.response = mock_response
+        mock_response.raise_for_status.side_effect = http_error
+
+        mock_post.return_value = mock_response
+
+        # Send test message
+        custom_backend_send_test_message(
+            "https://hooks.example.com/test",
+            "Test project",
+            "Test Custom",
+            self.config.id
+        )
+
+        # Verify failure status was stored
+        self.config.refresh_from_db()
+        self.assertIsNotNone(self.config.last_failure_timestamp)
+        self.assertEqual(self.config.last_failure_status_code, 500)
+        self.assertEqual(self.config.last_failure_response_text, 'Internal Server Error')
+        self.assertFalse(self.config.last_failure_is_json)
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_custom_test_message_connection_error_stores_failure(self, mock_post):
+        # Mock connection error
+        mock_post.side_effect = requests.ConnectionError("Connection failed")
+
+        # Send test message
+        custom_backend_send_test_message(
+            "https://hooks.example.com/test",
+            "Test project",
+            "Test Custom",
+            self.config.id
+        )
+
+        # Verify failure status was stored
+        self.config.refresh_from_db()
+        self.assertIsNotNone(self.config.last_failure_timestamp)
+        self.assertIsNone(self.config.last_failure_status_code)  # No HTTP response
+        self.assertIsNone(self.config.last_failure_response_text)
+        self.assertIsNone(self.config.last_failure_is_json)
+        self.assertEqual(self.config.last_failure_error_type, "ConnectionError")
+        self.assertEqual(self.config.last_failure_error_message, "Connection failed")
+
+    @patch('alerts.service_backends.base.BaseWebhookBackend.safe_post')
+    def test_custom_alert_message_success_clears_failure_status(self, mock_post):
+        # Set up existing failure status
+        self.config.last_failure_timestamp = timezone.now()
+        self.config.last_failure_status_code = 500
+        self.config.save()
+
+        # Create issue
+        issue, _ = get_or_create_issue(project=self.project)
+
+        # Mock successful response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        # Send alert message
+        custom_backend_send_alert(
+            "https://hooks.example.com/test",
+            issue.id,
+            "New issue",
+            "a",
+            "NEW",
+            self.config.id
+        )
+
+        # Verify failure status was cleared
+        self.config.refresh_from_db()
+        self.assertIsNone(self.config.last_failure_timestamp)
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_custom_test_message_fields_match_alert_message(self, mock_post):
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_post.return_value = mock_response
+
+        custom_backend_send_test_message(
+            "https://hooks.example.com/test",
+            "Test project",
+            "Test Custom",
+            self.config.id,
+        )
+        test_payload = json.loads(mock_post.call_args.kwargs["data"])
+
+        issue, _ = get_or_create_issue(project=self.project)
+        custom_backend_send_alert(
+            "https://hooks.example.com/test",
+            issue.id,
+            "New issue",
+            "a",
+            "NEW",
+            self.config.id,
+        )
+        alert_payload = json.loads(mock_post.call_args.kwargs["data"])
+
+        self.assertEqual(set(test_payload), set(alert_payload))
+
+    def test_has_recent_failure_method(self):
+        # Initially no failure
+        self.assertFalse(self.config.has_recent_failure())
+
+        # Set failure
+        self.config.last_failure_timestamp = timezone.now()
+        self.config.save()
+        self.assertTrue(self.config.has_recent_failure())
+
+        # Clear failure
+        self.config.clear_failure_status()
+        self.config.save()
+        self.assertFalse(self.config.has_recent_failure())
+
 class TestWebhookSecurityValidation(DjangoTestCase):
     def test_safe_post_does_not_re_resolve_after_validation(self):
         original_getaddrinfo = socket.getaddrinfo
@@ -762,6 +1165,73 @@ class TestWebhookConfigForms(DjangoTestCase):
 
     def test_mattermost_form_rejects_blocked_target(self):
         form = MattermostConfigForm(data={"webhook_url": "http://10.0.0.42/hooks/test", "channel": "town-square"})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("non-global IP address", form.errors["webhook_url"][0])
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_telegram_form_accepts_public_target(self, mock_resolve):
+        mock_resolve.return_value = {"149.154.167.220"}
+        form = TelegramConfigForm(
+            data={
+                "bot_token": "123456:ABCdef_test_token",
+                "chat_id": "-1001234567890",
+                "message_thread_id": 99,
+            }
+        )
+
+        self.assertTrue(form.is_valid())
+
+    def test_telegram_form_rejects_invalid_chat_id(self):
+        form = TelegramConfigForm(
+            data={
+                "bot_token": "123456:ABCdef_test_token",
+                "chat_id": "bad-chat",
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("numeric chat ID or @channelusername", form.errors["chat_id"][0])
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_telegram_form_accepts_channel_username(self, mock_resolve):
+        mock_resolve.return_value = {"149.154.167.220"}
+        form = TelegramConfigForm(
+            data={
+                "bot_token": "123456:ABCdef_test_token",
+                "chat_id": "@my_channel",
+            }
+        )
+
+        self.assertTrue(form.is_valid())
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_telegram_form_rejects_topic_id_for_channel_username(self, mock_resolve):
+        mock_resolve.return_value = {"149.154.167.220"}
+        form = TelegramConfigForm(
+            data={
+                "bot_token": "123456:ABCdef_test_token",
+                "chat_id": "@my_channel",
+                "message_thread_id": 99,
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("Topic ID can only be used with numeric chat IDs.", form.errors["message_thread_id"][0])
+
+    def test_telegram_form_requires_bot_token(self):
+        form = TelegramConfigForm(
+            data={
+                "bot_token": "",
+                "chat_id": "-1001234567890",
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("This field is required.", form.errors["bot_token"][0])
+
+    def test_custom_form_rejects_blocked_target(self):
+        form = CustomBackendForm(data={"webhook_url": "http://10.0.0.42/hooks/test"})
 
         self.assertFalse(form.is_valid())
         self.assertIn("non-global IP address", form.errors["webhook_url"][0])
