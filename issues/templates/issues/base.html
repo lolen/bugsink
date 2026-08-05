@@ -8,8 +8,6 @@
 
 {% block title %}{{ issue.title }} · {{ block.super }}{% endblock %}
 
-{% block container_width %}max-w-[90rem]{% endblock %}
-
 {% block content %}
 
 {% for warning in issue.project.get_warnings %}
