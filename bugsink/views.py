@@ -12,6 +12,7 @@ from django.views.defaults import (
 from django.shortcuts import redirect
 from django.conf import settings
 from django.db.utils import OperationalError
+from django.utils import timezone
 
 from django.template.defaultfilters import filesizeformat
 from django.views.decorators.http import require_GET, require_POST
@@ -66,24 +67,42 @@ def _exception_for_error_page(exception):
 
 @phone_home
 def home(request):
-    accepted_projects = request.user.project_set.filter(projectmembership__accepted=True).distinct()
-    if accepted_projects.count() == 1:
-        # if the user has exactly one project, we redirect them to that project
-        project = accepted_projects.get()
-        return redirect("issue_list_open", project_pk=project.id)
+    # note: no filter on projectmembership__accepted=True here; if there is _any_ project, the dashboard is useful.
+    if request.user.project_set.all().distinct().count() == 0:
+        if get_bugsink_settings().SINGLE_TEAM:
+            # in single-team mode, there's is no (meaningful) team list. We redirect to the (empty) project list instead
+            return redirect("project_list")
 
-    if request.user.project_set.all().distinct().count() > 0:
-        # note: no filter on projectmembership__accepted=True here; if there is _any_ project, we show the project list
-        return redirect("project_list")
+        # final fallback: show the team list.
+        # (the assumption is: if there are no projects, the team-list is the most useful page to show, because if there
+        # are no teams, this is where you can create one, and if there are teams, this is where you can select one)
+        return redirect("team_list")
 
-    if get_bugsink_settings().SINGLE_TEAM:
-        # in single-team mode, there's is no (meaningful) team list. We redirect to the (empty) project list instead
-        return redirect("project_list")
+    return _dashboard(request)
 
-    # final fallback: show the team list.
-    # (the assumption is: if there are no projects, the team-list is the most useful page to show, because if there are
-    # no teams, this is where you can create one, and if there are teams, this is where you can select one)
-    return redirect("team_list")
+
+def _dashboard(request):
+    # imported here (rather than at module level) to avoid circular imports: bugsink/views.py is imported very early
+    # (from bugsink/urls.py), before the app registry that these models depend on is necessarily ready.
+    from issues.models import Issue
+    from teams.models import TeamMembership
+    from projects.models import get_issue_accessible_project_ids
+    from events.sparklines import get_installation_event_sparkline
+
+    accessible_project_ids = get_issue_accessible_project_ids(request.user)
+
+    open_issues = Issue.objects.filter(
+        project_id__in=accessible_project_ids, is_deleted=False, is_resolved=False, is_muted=False)
+
+    recent_issues = list(open_issues.select_related("project").order_by("-last_seen")[:10])
+
+    return render(request, "bugsink/home.html", {
+        "project_count": len(accessible_project_ids),
+        "team_count": TeamMembership.objects.filter(user=request.user, accepted=True).count(),
+        "open_issue_count": open_issues.count(),
+        "recent_issues": recent_issues,
+        "installation_sparkline": get_installation_event_sparkline(timezone.now()),
+    })
 
 
 @login_exempt

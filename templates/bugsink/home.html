@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+{% load i18n %}
+
+{% block title %}{% translate "Dashboard" %} · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+<div class="m-4">
+
+    <h1 class="text-4xl font-bold tracking-tight mt-4">{% translate "Dashboard" %}</h1>
+
+    <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <a href="{% url "project_list" %}" class="block border border-edge rounded-md p-4 bg-surface hover:bg-raised">
+            <div class="text-2xl font-bold tabular-nums">{{ project_count|intcomma }}</div>
+            <div class="text-xs uppercase tracking-wide text-ink-muted font-bold">{% translate "Projects" %}</div>
+        </a>
+        <a href="{% url "team_list" %}" class="block border border-edge rounded-md p-4 bg-surface hover:bg-raised">
+            <div class="text-2xl font-bold tabular-nums">{{ team_count|intcomma }}</div>
+            <div class="text-xs uppercase tracking-wide text-ink-muted font-bold">{% translate "Teams" %}</div>
+        </a>
+        <a href="{% url "global_issue_list_open" %}" class="block border border-edge rounded-md p-4 bg-surface hover:bg-raised">
+            <div class="text-2xl font-bold tabular-nums">{{ open_issue_count|intcomma }}</div>
+            <div class="text-xs uppercase tracking-wide text-ink-muted font-bold">{% translate "Open Issues" %}</div>
+        </a>
+    </div>
+
+    <div class="mt-6 border border-edge rounded-md p-4 bg-surface">
+        <div class="text-xs uppercase tracking-wide text-ink-muted font-bold mb-2">{% translate "Events" %}</div>
+        {% include "events/_event_sparkline.html" with event_sparkline=installation_sparkline %}
+    </div>
+
+    <div class="mt-6 flex items-center">
+        <div class="text-xs uppercase tracking-wide text-ink-muted font-bold">{% translate "Recently Seen Open Issues" %}</div>
+        <a href="{% url "global_issue_list_open" %}" class="ml-auto text-sm text-accent font-bold">{% translate "View all" %}</a>
+    </div>
+
+    <div class="mt-1 border border-edge rounded-md overflow-hidden shadow-sm">
+        <table class="w-full">
+        <tbody>
+            {% for issue in recent_issues %}
+            <tr class="bg-surface border-b border-edge-soft hover:bg-raised last:border-b-0">
+            <td class="w-full py-3 px-4">
+                <a href="{{ issue.get_absolute_url }}" class="text-sm text-accent font-bold">{{ issue.title|truncatechars:100 }}</a>
+                <div class="text-xs text-ink-muted mt-0.5">{{ issue.project.name }}</div>
+            </td>
+            <td class="py-3 pr-4 text-right whitespace-nowrap">
+                <div class="text-xs text-ink-dim">{{ issue.last_seen|naturaltime }}</div>
+            </td>
+            </tr>
+            {% empty %}
+            <tr class="bg-surface">
+            <td class="w-full p-4 text-sm text-ink-muted">
+                {% translate "No open issues. Nice." %}
+            </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        </table>
+    </div>
+
+</div>
+
+{% endblock %}

@@ -86,7 +86,12 @@
             placeholder="{% translate 'Search issues...' %}"
             title="{% translate 'Search exception text, or filter by tag, e.g. environment:production' %}"
             autocomplete="off" data-suggest-url="{% url "tag_suggestions" project_pk=project.id %}"
-            class="bg-surface border-edge text-sm h-9 pl-9 pr-3 py-0 w-64 focus:border-accent focus:ring-accent-wash rounded-md"/>
+            class="bg-surface border-edge text-sm h-9 pl-9 {% if q %}pr-8{% else %}pr-3{% endif %} py-0 w-64 focus:border-accent focus:ring-accent-wash rounded-md"/>
+        {% if q %}
+        <a href="{{ request.path }}" title="{% translate 'Clear search' %}" class="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </a>
+        {% endif %}
         <div id="issue-search-suggestions" class="hidden absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto bg-surface border border-edge rounded-md shadow-lg text-sm"></div>
     </div>
     {% endif %}
