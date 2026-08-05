@@ -77,11 +77,19 @@ def _send_alert(issue_id, state_description, alert_article, alert_reason, **kwar
 
     from issues.models import Issue  # avoid circular import
 
+    from .models import TeamMessagingServiceConfig
+
     issue = Issue.objects.get(id=issue_id)
 
     for service in issue.project.service_configs.all():
         service_backend = service.get_backend()
         service_backend.send_alert(issue_id, state_description, alert_article, alert_reason, **kwargs)
+
+    if issue.project.team_id:
+        for service in TeamMessagingServiceConfig.objects.filter(
+                team_id=issue.project.team_id, projects=issue.project):
+            service_backend = service.get_backend()
+            service_backend.send_alert(issue_id, state_description, alert_article, alert_reason, **kwargs)
 
     for user in _get_users_for_email_alert(issue):
         send_rendered_email(

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% translate "Alerts" %} · {{ team.name }} · {{ site_title }}{% endblock %}
+
+{% block content %}
+
+<div class="m-4">
+
+    {% if messages %}
+    <ul class="mb-4 space-y-2">
+        {% for message in messages %}
+            <li class="bg-raised border border-edge border-l-4 border-l-accent rounded-md p-4 text-sm">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="flex items-end gap-6 flex-wrap">
+        <div>
+            <div class="text-sm text-ink-muted mt-4">{{ team.name }}</div>
+            <h1 class="text-4xl font-bold tracking-tight">{% translate "Alerts" %}</h1>
+        </div>
+        <div class="ml-auto">
+            <a class="font-bold text-accent-ink border-accent h-9 px-3 text-sm inline-flex items-center justify-center border bg-accent hover:brightness-110 active:ring-3 rounded-md" href="{% url "team_messaging_service_add" team_pk=team.pk %}">{% translate "Add" %}</a>
+        </div>
+    </div>
+
+    <div class="mt-3 text-xs font-bold uppercase tracking-wide text-ink-muted">{% translate "Messaging Services" %}</div>
+    <div class="mt-1 text-sm text-ink-muted">{% translate "These fan out to whichever of the team's projects each service is configured for, alongside anything those projects configure on their own." %}</div>
+
+    <form action="." method="post">
+    {% csrf_token %}
+
+    <div class="mt-3 border border-edge rounded-md overflow-hidden shadow-sm">
+        <table class="w-full">
+        <tbody>
+            {% for service_config in service_configs %}
+            <tr class="bg-surface hover:bg-raised {% if not forloop.last %}border-b border-edge-soft{% endif %}">
+            <td class="w-full py-3 px-4">
+                <div class="flex items-center gap-2">
+                    <div>
+                        <a href="{% url "team_messaging_service_edit" team_pk=team.pk service_pk=service_config.pk %}" class="text-sm text-accent font-bold">{{ service_config.display_name }}</a>
+                        {% if service_config.has_recent_failure %}
+                        <div class="text-xs text-critical mt-1">
+                            <span class="inline-flex items-center leading-none">
+                                <svg class="w-4 h-4 mr-1 align-middle" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                </svg>
+                                <span>Last alert failed ({{ service_config.last_failure_timestamp|date:"M j, H:i" }})</span>
+                                <a href="{% url "team_messaging_service_edit" team_pk=team.pk service_pk=service_config.pk %}#failure-details"
+                                   class="text-critical underline ml-2">View details</a>
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <span class="bg-raised rounded-full border border-edge px-2 py-0.5 ml-auto text-xs text-ink-muted whitespace-nowrap">{{ service_config.get_kind_display }}</span>
+                </div>
+            </td>
+
+            <td class="py-3 px-4">
+                <div class="flex justify-end gap-2">
+                    <button name="action" value="test:{{ service_config.id }}" class="font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center border hover:bg-raised active:ring-3 rounded-md whitespace-nowrap">{% translate "Test" context "Alerts" %}</button>
+                    <button name="action" value="remove:{{ service_config.id }}" class="font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center border hover:bg-raised active:ring-3 rounded-md whitespace-nowrap">{% translate "Remove" context "Alerts" %}</button>
+                </div>
+            </td>
+            </tr>
+            {% empty %}
+            <tr class="bg-surface">
+            <td class="w-full py-3 px-4 text-sm text-ink-muted">
+                {% translate "No Messaging Services Configured." %} <a href="{% url "team_messaging_service_add" team_pk=team.pk %}" class="text-accent font-bold">{% translate "Add Messaging Service" %}</a>.
+            </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        </table>
+    </div>
+    </form>
+
+    <div class="flex mt-4 text-sm">
+        <div class="ml-auto">
+            <a href="{% url "team_edit" team_pk=team.pk %}" class="text-accent font-bold">{% translate "Settings" context "Alerts" %}</a>
+            <span class="font-bold text-ink-muted">|</span> <a href="{% url "team_list" %}" class="text-accent font-bold">{% translate "Back to Teams" %}</a>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

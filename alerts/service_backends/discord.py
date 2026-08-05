@@ -53,13 +53,14 @@ class DiscordConfigForm(forms.Form):
         return webhook_url
 
 
-def _store_failure_info(service_config_id, exception, response=None):
-    """Store failure information in the MessagingServiceConfig with immediate_atomic"""
-    from alerts.models import MessagingServiceConfig
+def _store_failure_info(service_config_id, exception, response=None, config_kind="project"):
+    """Store failure information in the MessagingServiceConfig (or TeamMessagingServiceConfig) with immediate_atomic"""
+    from alerts.models import get_service_config_model
+    config_model = get_service_config_model(config_kind)
 
     with immediate_atomic(only_if_needed=True):
         try:
-            config = MessagingServiceConfig.objects.get(id=service_config_id)
+            config = config_model.objects.get(id=service_config_id)
 
             config.last_failure_timestamp = timezone.now()
             config.last_failure_error_type = type(exception).__name__
@@ -83,28 +84,29 @@ def _store_failure_info(service_config_id, exception, response=None):
                 config.last_failure_is_json = None
 
             config.save()
-        except MessagingServiceConfig.DoesNotExist:
+        except config_model.DoesNotExist:
             # Config was deleted while task was running
             pass
 
 
-def _store_success_info(service_config_id):
+def _store_success_info(service_config_id, config_kind="project"):
     """Clear failure information on successful operation"""
-    from alerts.models import MessagingServiceConfig
+    from alerts.models import get_service_config_model
+    config_model = get_service_config_model(config_kind)
 
     with immediate_atomic(only_if_needed=True):
         try:
-            config = MessagingServiceConfig.objects.get(id=service_config_id)
+            config = config_model.objects.get(id=service_config_id)
             config.clear_failure_status()
             config.save()
-        except MessagingServiceConfig.DoesNotExist:
+        except config_model.DoesNotExist:
             # Config was deleted while task was running
             pass
 
 
 @shared_task
 def discord_backend_send_test_message(
-    webhook_url, project_name, display_name, service_config_id
+    webhook_url, project_name, display_name, service_config_id, config_kind="project"
 ):
     # Discord uses embeds for rich formatting
     # Color: 0x7289DA is Discord's blurple color
@@ -132,18 +134,19 @@ def discord_backend_send_test_message(
 
         result.raise_for_status()
 
-        _store_success_info(service_config_id)
+        _store_success_info(service_config_id, config_kind)
     except requests.RequestException as e:
         response = getattr(e, 'response', None)
-        _store_failure_info(service_config_id, e, response)
+        _store_failure_info(service_config_id, e, response, config_kind)
 
     except Exception as e:
-        _store_failure_info(service_config_id, e)
+        _store_failure_info(service_config_id, e, config_kind=config_kind)
 
 
 @shared_task
 def discord_backend_send_alert(
-        webhook_url, issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None):
+        webhook_url, issue_id, state_description, alert_article, alert_reason, service_config_id, unmute_reason=None,
+        config_kind="project"):
 
     issue = Issue.objects.get(id=issue_id)
 
@@ -199,13 +202,13 @@ def discord_backend_send_alert(
 
         result.raise_for_status()
 
-        _store_success_info(service_config_id)
+        _store_success_info(service_config_id, config_kind)
     except requests.RequestException as e:
         response = getattr(e, 'response', None)
-        _store_failure_info(service_config_id, e, response)
+        _store_failure_info(service_config_id, e, response, config_kind)
 
     except Exception as e:
-        _store_failure_info(service_config_id, e)
+        _store_failure_info(service_config_id, e, config_kind=config_kind)
 
 
 class DiscordBackend(BaseWebhookBackend):
@@ -220,9 +223,10 @@ class DiscordBackend(BaseWebhookBackend):
     def send_test_message(self):
         discord_backend_send_test_message.delay(
             json.loads(self.service_config.config)["webhook_url"],
-            self.service_config.project.name,
+            self.service_config.display_scope_name(),
             self.service_config.display_name,
             self.service_config.id,
+            config_kind=self.service_config.CONFIG_KIND,
         )
 
     def send_alert(self, issue_id, state_description, alert_article, alert_reason, **kwargs):
@@ -234,5 +238,6 @@ class DiscordBackend(BaseWebhookBackend):
             alert_article,
             alert_reason,
             self.service_config.id,
+            config_kind=self.service_config.CONFIG_KIND,
             **kwargs,
         )
