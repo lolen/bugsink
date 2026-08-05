@@ -6,6 +6,8 @@ from .service_backends.slack import SlackBackend
 from .service_backends.mattermost import MattermostBackend
 from .service_backends.discord import DiscordBackend
 from .service_backends.msteams import MsTeamsBackend
+from .service_backends.telegram import TelegramBackend
+from .service_backends.custom import CustomBackend
 
 
 def get_alert_service_kind_choices():
@@ -16,6 +18,8 @@ def get_alert_service_kind_choices():
         ("mattermost", "Mattermost"),
         ("msteams", "Microsoft Teams"),
         ("slack", "Slack"),
+        ("telegram", "Telegram"),
+        ("custom", "Custom"),
     ]
 
 
@@ -37,6 +41,10 @@ def get_alert_service_backend_class(kind):
         return MsTeamsBackend
     if kind == "slack":
         return SlackBackend
+    if kind == "telegram":
+        return TelegramBackend
+    if kind == "custom":
+        return CustomBackend
     raise ValueError(f"Unknown backend kind: {kind}")
 
 

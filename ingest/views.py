@@ -339,6 +339,7 @@ class BaseIngestAPIView(View):
             json.dump(event_data, f)
 
         event_metadata = cls.get_event_meta(event_data["event_id"], ingested_at, ingestion_id, request, project)
+        event_metadata["has_minidump"] = True
         digest.delay(event_data["event_id"], event_metadata)
 
         return event_id
@@ -952,10 +953,6 @@ class IngestEnvelopeAPIView(BaseIngestAPIView):
             return HttpResponse()
 
         if event_count > 1 or minidump_count > 1:
-            # TODO: we do 2 passes (one for storing, one for calling the right task), and we check certain conditions
-            # only on the second pass; this means that we may not clean up after ourselves yet.
-            # TODO we don't do any minidump files cleanup yet in any of the cases.
-
             logger.info(
                 "can only deal with one event/minidump per envelope but found %s/%s, ignoring this envelope.",
                 event_count, minidump_count)
