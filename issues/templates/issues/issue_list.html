@@ -65,36 +65,44 @@
 <div class="flex items-center gap-3 mt-4 flex-wrap">
     <div class="inline-flex gap-0.5 p-0.5 bg-raised border border-edge-soft rounded-md">
     {% if is_global_issue_list %}
-    <a href="{% url "global_issue_list_open" %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "open" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Open" %}</a>
-    <a href="{% url "global_issue_list_unresolved" %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "unresolved" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Unresolved" %}</a>
-    <a href="{% url "global_issue_list_muted" %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "muted" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Muted" %}</a>
-    <a href="{% url "global_issue_list_resolved" %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "resolved" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Resolved" %}</a>
-    <a href="{% url "global_issue_list_all" %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "all" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "All" %}</a>
+    <a href="{% url "global_issue_list_open" %}?{% add_to_qs sort=sort %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "open" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Open" %}</a>
+    <a href="{% url "global_issue_list_unresolved" %}?{% add_to_qs sort=sort %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "unresolved" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Unresolved" %}</a>
+    <a href="{% url "global_issue_list_muted" %}?{% add_to_qs sort=sort %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "muted" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Muted" %}</a>
+    <a href="{% url "global_issue_list_resolved" %}?{% add_to_qs sort=sort %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "resolved" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Resolved" %}</a>
+    <a href="{% url "global_issue_list_all" %}?{% add_to_qs sort=sort %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "all" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "All" %}</a>
     {% else %}
-    <a href="{% url "issue_list_open" project_pk=project.id %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "open" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Open" %}</a>
-    <a href="{% url "issue_list_unresolved" project_pk=project.id %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "unresolved" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Unresolved" %}</a>
-    <a href="{% url "issue_list_muted" project_pk=project.id %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "muted" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Muted" %}</a>
-    <a href="{% url "issue_list_resolved" project_pk=project.id %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "resolved" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Resolved" %}</a>
-    <a href="{% url "issue_list_all" project_pk=project.id %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "all" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "All" %}</a>
+    <a href="{% url "issue_list_open" project_pk=project.id %}?{% add_to_qs sort=sort %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "open" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Open" %}</a>
+    <a href="{% url "issue_list_unresolved" project_pk=project.id %}?{% add_to_qs sort=sort %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "unresolved" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Unresolved" %}</a>
+    <a href="{% url "issue_list_muted" project_pk=project.id %}?{% add_to_qs sort=sort %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "muted" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Muted" %}</a>
+    <a href="{% url "issue_list_resolved" project_pk=project.id %}?{% add_to_qs sort=sort %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "resolved" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "Resolved" %}</a>
+    <a href="{% url "issue_list_all" project_pk=project.id %}?{% add_to_qs sort=sort %}" class="px-3 py-1 rounded-md text-sm {% if state_filter == "all" %}bg-surface text-ink font-bold shadow-sm{% else %}text-ink-muted hover:text-ink{% endif %}">{% translate "All" %}</a>
     {% endif %}
     </div>
-    {% if not is_global_issue_list %}
-    <div class="ml-auto relative">
-        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input
-            id="issue-search-input" form="issueSearchForm" type="text" name="q" value="{{ q }}"
-            placeholder="{% translate 'Search issues...' %}"
-            title="{% translate 'Search exception text, or filter by tag, e.g. environment:production' %}"
-            autocomplete="off" data-suggest-url="{% url "tag_suggestions" project_pk=project.id %}"
-            class="bg-surface border-edge text-sm h-9 pl-9 {% if q %}pr-8{% else %}pr-3{% endif %} py-0 w-64 focus:border-accent focus:ring-accent-wash rounded-md"/>
-        {% if q %}
-        <a href="{{ request.path }}" title="{% translate 'Clear search' %}" class="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-        </a>
+    <div class="ml-auto flex items-center gap-2">
+        <select
+            id="issue-sort" name="sort" form="issueSearchForm" aria-label="{% translate 'Sort issues' %}" onchange="this.form.submit()"
+            class="bg-surface border-edge text-sm h-9 pl-3 pr-8 py-0 focus:border-accent focus:ring-accent-wash rounded-md">
+            <option value="last_seen"{% if sort == "last_seen" %} selected{% endif %}>{% translate "Last seen" %}</option>
+            <option value="events"{% if sort == "events" %} selected{% endif %}>{% translate "Most events" %}</option>
+        </select>
+        {% if not is_global_issue_list %}
+        <div class="relative">
+            <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input
+                id="issue-search-input" form="issueSearchForm" type="text" name="q" value="{{ q }}"
+                placeholder="{% translate 'Search issues...' %}"
+                title="{% translate 'Search exception text, or filter by tag, e.g. environment:production' %}"
+                autocomplete="off" data-suggest-url="{% url "tag_suggestions" project_pk=project.id %}"
+                class="bg-surface border-edge text-sm h-9 pl-9 {% if q %}pr-8{% else %}pr-3{% endif %} py-0 w-64 focus:border-accent focus:ring-accent-wash rounded-md"/>
+            {% if q %}
+            <a href="{{ request.path }}" title="{% translate 'Clear search' %}" class="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </a>
+            {% endif %}
+            <div id="issue-search-suggestions" class="hidden absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto bg-surface border border-edge rounded-md shadow-lg text-sm"></div>
+        </div>
         {% endif %}
-        <div id="issue-search-suggestions" class="hidden absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-y-auto bg-surface border border-edge rounded-md shadow-lg text-sm"></div>
     </div>
-    {% endif %}
 
     <div class="{% if is_global_issue_list %}ml-auto{% endif %} hidden group-has-[.js-issue-checkbox:checked]:flex items-center">
     <span class="text-sm text-ink-muted mr-2">{% translate "Selected:" %}</span>
