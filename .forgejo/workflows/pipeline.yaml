@@ -14,17 +14,16 @@ jobs:
   test:
     name: Lint and test
     runs-on: ubuntu-latest
+    container: python:3.12-slim
     timeout-minutes: 20
     env:
       DJANGO_SETTINGS_MODULE: bugsink.settings.development
     steps:
+      - name: Install git
+        run: apt-get update && apt-get install -y --no-install-recommends git
+
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
 
       - name: Install dependencies
         run: |
