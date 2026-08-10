@@ -26,6 +26,7 @@ jobs:
         with:
           repository: bugsink/event-samples
           github-server-url: https://github.com
+          token: ''
           path: event-samples
 
       - name: Run lint and tests (sqlite)
