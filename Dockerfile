@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip wheel --wheel-dir /wheels mysqlclient
 
 # Actual image (based on slim)
-FROM python:${PYTHON_VERSION}-slim
+FROM python:${PYTHON_VERSION}-slim AS app
 
 ENV PYTHONUNBUFFERED=1
 
@@ -67,3 +67,16 @@ USER bugsink
 HEALTHCHECK CMD python -c 'import requests; requests.get("http://localhost:8000/health/ready").raise_for_status()'
 
 CMD [ "monofy", "bugsink-show-version", "&&", "bugsink-manage", "check", "--deploy", "--fail-level", "WARNING", "&&", "bugsink-manage", "migrate", "snappea", "--database=snappea", "&&", "bugsink-manage", "migrate", "&&", "bugsink-manage", "prestart", "&&", "gunicorn", "--config", "bugsink/gunicorn.docker.conf.py", "--bind=0.0.0.0:$PORT", "--access-logfile", "-", "bugsink.wsgi", "|||", "bugsink-runsnappea"]
+
+# CI-only stage: adds lint/test tooling on top of the app image. Not used in production.
+FROM app AS test
+
+USER root
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=bind,source=requirements.development.txt,target=/tmp/requirements.development.txt \
+    pip install -r /tmp/requirements.development.txt
+
+# stays root: tests write db.sqlite3 into /app, which is root-owned (COPY doesn't chown it);
+# this stage is CI-only and never runs in production, so that's an acceptable tradeoff.
+CMD ["python", "manage.py", "test"]

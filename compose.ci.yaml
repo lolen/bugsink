@@ -1,0 +1,16 @@
+services:
+  test:
+    build:
+      context: .
+      target: test
+    environment:
+      DJANGO_SETTINGS_MODULE: bugsink.settings.development
+      DB: sqlite
+      SAMPLES_DIR: /event-samples
+    volumes:
+      - ./event-samples:/event-samples:ro
+    command: >
+      sh -c "ruff check . &&
+             python manage.py check &&
+             python manage.py makemigrations --check &&
+             python manage.py test"
