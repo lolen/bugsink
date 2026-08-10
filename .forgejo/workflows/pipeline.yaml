@@ -25,6 +25,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bugsink/event-samples
+          github-server-url: https://github.com
           path: event-samples
 
       - name: Run lint and tests (sqlite)
