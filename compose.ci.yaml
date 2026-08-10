@@ -7,8 +7,6 @@ services:
       DJANGO_SETTINGS_MODULE: bugsink.settings.development
       DB: sqlite
       SAMPLES_DIR: /event-samples
-    volumes:
-      - ./event-samples:/event-samples:ro
     command: >
       sh -c "ruff check . &&
              python manage.py check &&

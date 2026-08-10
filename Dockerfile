@@ -77,6 +77,10 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=requirements.development.txt,target=/tmp/requirements.development.txt \
     pip install -r /tmp/requirements.development.txt
 
+# baked in at build time (not runtime-mounted), so this works the same regardless of
+# how/where the CI runner's docker daemon sees the build context's filesystem.
+COPY event-samples /event-samples
+
 # stays root: tests write db.sqlite3 into /app, which is root-owned (COPY doesn't chown it);
 # this stage is CI-only and never runs in production, so that's an acceptable tradeoff.
 CMD ["python", "manage.py", "test"]
