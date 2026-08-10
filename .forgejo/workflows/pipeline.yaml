@@ -22,12 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check out event-samples (test fixtures)
-        uses: actions/checkout@v4
-        with:
-          repository: bugsink/event-samples
-          github-server-url: https://github.com
-          token: ''
-          path: event-samples
+        run: git clone --depth 1 https://github.com/bugsink/event-samples.git event-samples
 
       - name: Run lint and tests (sqlite)
         run: docker compose run --rm --no-deps test
