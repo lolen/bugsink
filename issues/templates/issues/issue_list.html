@@ -168,31 +168,31 @@
       <thead>
             <tr class="bg-surface border-b border-edge text-xs uppercase tracking-wide text-ink-muted">
                 <td class="p-0 w-1"></td>
-                <td class="w-10 text-center align-middle"><div class="inline-flex p-1 rounded-full hover:bg-raised cursor-pointer" onclick="toggleContainedCheckbox(this); matchIssueCheckboxesStateToMain(this)">{% if page_obj.object_list|length > 0 %}<input type="checkbox" class="bg-surface border-edge checked:bg-accent checked:border-accent text-accent focus:ring-accent-wash cursor-pointer js-main-checkbox" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>{% endif %}</div></td>
-                <td class="py-2 pr-4 text-left font-bold">{% translate "Issue" %}</td>
+                <td class="w-10 pl-2 text-center align-middle"><div class="inline-flex p-1 rounded-full hover:bg-raised cursor-pointer" onclick="toggleContainedCheckbox(this); matchIssueCheckboxesStateToMain(this)">{% if page_obj.object_list|length > 0 %}<input type="checkbox" class="bg-surface border-edge checked:bg-accent checked:border-accent text-accent focus:ring-accent-wash cursor-pointer js-main-checkbox" onclick="event.stopPropagation(); matchIssueCheckboxesStateToMain(this.parentNode)"/>{% endif %}</div></td>
+                <td class="py-2 pl-3 pr-4 text-left font-bold">{% translate "Issue" %}</td>
                 <td class="py-2 px-3 w-28 text-right font-bold">{% translate "Last 24h" %}</td>
                 <td class="py-2 pl-3 w-24 text-right font-bold">{% translate "Events" %}</td>
-                <td class="py-2 pl-3 pr-4 w-36 text-right font-bold whitespace-nowrap">{% translate "Seen" %}</td>
+                <td class="py-2 pl-3 pr-4 w-28 text-right font-bold whitespace-nowrap">{% translate "Seen" %}</td>
             </tr>
       </thead>
       <tbody>
             {% for issue in page_obj %}
             <tr class="bg-surface border-b border-edge-soft hover:bg-raised has-[input:checked]:bg-accent-wash">
             <td class="p-0 w-1 {% if issue.is_resolved %}bg-ok{% elif issue.is_muted %}bg-edge{% else %}bg-critical{% endif %}"><div class="w-1"></div></td>
-            <td class="w-10 align-middle text-center">
+            <td class="w-10 pl-2 align-middle text-center">
                 <div class="inline-flex p-1 rounded-full hover:bg-raised cursor-pointer" onclick="toggleContainedCheckbox(this); matchMainCheckboxStateToIssueCheckboxes()">
                     <input type="checkbox" {% if issue.id in unapplied_issue_ids %}checked{% endif %} name="issue_ids[]" value="{{ issue.id }}" class="bg-surface border-edge checked:bg-accent checked:border-accent text-accent focus:ring-accent-wash cursor-pointer js-issue-checkbox" onclick="event.stopPropagation(); matchMainCheckboxStateToIssueCheckboxes()"/>
                 </div>
             </td>
-            <td class="w-full py-3 pr-4 align-middle">
+            <td class="w-full py-3 pl-3 pr-4 align-middle">
                 <div class="min-w-0">
                     <a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/event/last/{% current_qs %}" class="flex items-baseline gap-2 min-w-0 fill-ink-muted">
                         {% if issue.is_resolved %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4 shrink-0 self-center"><path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" /></svg>{% endif %}{% if issue.is_muted %}<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 shrink-0 self-center"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 9.75 19.5 12m0 0 2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6 4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" /></svg>{% endif %}
                         {% if issue.calculated_type %}
-                            <span class="font-mono font-bold text-ink shrink-0 {% if issue.is_muted or issue.is_resolved %}opacity-60{% endif %}">{{ issue.calculated_type }}</span>
-                            <span class="text-ink-dim truncate {% if issue.is_muted or issue.is_resolved %}opacity-60{% endif %}">{{ issue.calculated_value|truncatechars:140 }}</span>
+                            <span class="text-sm font-mono font-bold text-ink shrink-0 {% if issue.is_muted or issue.is_resolved %}opacity-60{% endif %}">{{ issue.calculated_type }}</span>
+                            <span class="text-sm text-ink-dim truncate {% if issue.is_muted or issue.is_resolved %}opacity-60{% endif %}">{{ issue.calculated_value|truncatechars:140 }}</span>
                         {% else %}
-                            <span class="font-bold text-ink truncate">{{ issue.title|truncatechars:100 }}</span>
+                            <span class="text-sm font-bold text-ink truncate">{{ issue.title|truncatechars:100 }}</span>
                         {% endif %}
                     </a>
                     <div class="flex items-center gap-2 mt-0.5 text-xs text-ink-muted min-w-0">
@@ -208,12 +208,12 @@
                 {% include "events/_compact_event_sparkline.html" with event_sparkline=issue.list_sparkline %}
             </td>
             <td class="py-3 pl-3 w-24 text-right align-middle">
-                <div class="font-bold tabular-nums text-ink">{{ issue.digested_event_count|intcomma }}</div>
+                <div class="text-sm font-bold tabular-nums text-ink">{{ issue.digested_event_count|intcomma }}</div>
                 {% if issue.digested_event_count != issue.stored_event_count %}<div class="text-xs text-ink-muted tabular-nums">{{ issue.stored_event_count|intcomma }} av</div>{% endif %}
             </td>
-            <td class="py-3 pl-3 pr-4 w-36 text-right align-middle whitespace-nowrap">
+            <td class="py-3 pl-3 pr-4 w-28 text-right align-middle whitespace-nowrap leading-tight">
                 <div class="text-xs text-ink-dim">{{ issue.last_seen|naturaltime }}</div>
-                <div class="text-xs text-ink-muted tabular-nums">{% blocktranslate with age=issue.first_seen|date:"j M" %}from {{ age }}{% endblocktranslate %}</div>
+                <div class="text-[11px] text-ink-muted tabular-nums">{% blocktranslate with age=issue.first_seen|date:"j M" %}from {{ age }}{% endblocktranslate %}</div>
             </td>
             </tr>
             {% empty %}
