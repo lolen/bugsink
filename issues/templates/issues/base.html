@@ -21,7 +21,7 @@
 <div class="m-4 flex flex-col lg:flex-row-reverse"><!-- container for the white bit (issue title, buttons) at the top of the page -->
 
     <div class="ml-auto flex-none pb-4 lg:pb-0"><!-- top, RHS (buttons) -->
-        <form action="." method="post">
+        <form action="." method="post" class="flex flex-wrap items-center">
         {% csrf_token %}
         {% if issue.is_resolved %}{# i.e. buttons disabled #}
             <button class="font-bold text-accent-ink border-accent h-9 px-3 text-sm inline-flex items-center justify-center ml-1 border bg-accent hover:brightness-110 active:ring-3 rounded-md" name="action" value="reopen">{% translate "Reopen" %}</button>
