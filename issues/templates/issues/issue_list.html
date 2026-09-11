@@ -186,13 +186,15 @@
             </td>
             <td class="w-full max-w-0 py-3 pl-3 pr-4 align-middle">
                 <div class="min-w-0">
-                    <a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/event/last/{% current_qs %}" class="flex items-baseline gap-2 min-w-0 fill-ink-muted">
-                        {% if issue.is_resolved %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4 shrink-0 self-center"><path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" /></svg>{% endif %}{% if issue.is_muted %}<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 shrink-0 self-center"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 9.75 19.5 12m0 0 2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6 4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" /></svg>{% endif %}
+                    <a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/event/last/{% current_qs %}" class="flex items-start gap-2 min-w-0 fill-ink-muted" title="{{ issue.calculated_type }}{% if issue.calculated_type and issue.calculated_value %}: {% endif %}{{ issue.calculated_value }}">
+                        {% if issue.is_resolved %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4 shrink-0 self-center mt-0.5"><path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" /></svg>{% endif %}{% if issue.is_muted %}<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 shrink-0 self-center mt-0.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 9.75 19.5 12m0 0 2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6 4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" /></svg>{% endif %}
                         {% if issue.calculated_type %}
-                            <span class="text-sm font-mono font-bold text-ink shrink min-w-0 truncate {% if issue.is_muted or issue.is_resolved %}opacity-60{% endif %}">{{ issue.calculated_type }}</span>
-                            <span class="text-sm text-ink-dim shrink-[9999] min-w-0 truncate {% if issue.is_muted or issue.is_resolved %}opacity-60{% endif %}">{{ issue.calculated_value|truncatechars:140 }}</span>
+                            <span class="min-w-0 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                <span class="text-sm font-mono font-bold text-ink shrink-0 {% if issue.is_muted or issue.is_resolved %}opacity-60{% endif %}">{{ issue.calculated_type }}</span>
+                                <span class="text-sm text-ink-dim min-w-0 line-clamp-2 break-words leading-snug {% if issue.is_muted or issue.is_resolved %}opacity-60{% endif %}">{{ issue.calculated_value|truncatechars:300 }}</span>
+                            </span>
                         {% else %}
-                            <span class="text-sm font-bold text-ink truncate">{{ issue.title|truncatechars:100 }}</span>
+                            <span class="text-sm font-bold text-ink line-clamp-2 break-words leading-snug">{{ issue.title|truncatechars:200 }}</span>
                         {% endif %}
                     </a>
                     <div class="flex items-center gap-2 mt-0.5 text-xs text-ink-muted min-w-0">
