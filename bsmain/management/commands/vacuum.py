@@ -7,7 +7,7 @@ from bugsink.app_settings import get_settings
 from events.tasks import delete_events_older_than_sync
 from files.tasks import vacuum_files_sync
 from ingest.management.commands.vacuum_ingest_dir import vacuum_ingest_dir_sync
-from issues.tasks import delete_marked_issues_sync, mark_orphaned_issues_sync
+from issues.tasks import delete_marked_issues_sync, mark_orphaned_issues_sync, mark_stale_unresolved_issues_sync
 from tags.tasks import vacuum_eventless_issuetags_sync, vacuum_tags_sync
 
 
@@ -49,6 +49,11 @@ class Command(BaseCommand):
             '--orphaned-issues',
             action='store_true',
             help="Delete issues without stored events. Not included by default.",
+        )
+        parser.add_argument(
+            '--stale-unresolved-issues',
+            action='store_true',
+            help="Delete unresolved issues older than each project's configured max age.",
         )
         parser.add_argument(
             '--chunk-max-days',
@@ -97,6 +102,7 @@ class Command(BaseCommand):
         run_ingest_dir = options['ingest_dir']
         run_deleted_issues = options['deleted_issues']
         run_orphaned_issues = options['orphaned_issues']
+        run_stale_unresolved_issues = options['stale_unresolved_issues']
 
         orphaned_issue_max_days = options["orphaned_issue_max_days"]
         if orphaned_issue_max_days is not None and orphaned_issue_max_days < 0:
@@ -110,15 +116,18 @@ class Command(BaseCommand):
             run_ingest_dir,
             run_deleted_issues,
             run_orphaned_issues,
+            run_stale_unresolved_issues,
         ]):
             # If no specific options were provided, run all vacuum tasks by default, except orphaned issue cleanup,
-            # because deleting issues is destructive and must be explicitly requested.
+            # because deleting issues is destructive and must be explicitly requested. Stale unresolved issue cleanup
+            # is included by default because it is opt-in per project (via stale_issue_max_age_days, default 0/off).
             run_files = True
             run_tags = True
             run_eventless_issuetags = True
             run_old_events = True
             run_ingest_dir = True
             run_deleted_issues = True
+            run_stale_unresolved_issues = True
 
         if run_files:
             settings = get_settings()
@@ -156,7 +165,11 @@ class Command(BaseCommand):
             self.stdout.write("Vacuuming orphaned issues...")
             mark_orphaned_issues_sync(cutoff)
 
-        if run_orphaned_issues or run_deleted_issues:
+        if run_stale_unresolved_issues:
+            self.stdout.write("Vacuuming stale unresolved issues...")
+            mark_stale_unresolved_issues_sync()
+
+        if run_orphaned_issues or run_deleted_issues or run_stale_unresolved_issues:
             self.stdout.write("Vacuuming deleted issues...")
             delete_marked_issues_sync()
 

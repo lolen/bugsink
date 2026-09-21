@@ -1,3 +1,7 @@
+from datetime import timedelta
+
+from django.utils import timezone
+
 from snappea.decorators import shared_task
 
 from bugsink.utils import get_model_topography, delete_deps_with_budget
@@ -7,6 +11,7 @@ from bugsink.transaction import immediate_atomic, delay_on_commit
 DELETE_ISSUE_DEPS_BATCH_SIZE = 500
 MARK_ORPHANED_ISSUES_BATCH_SIZE = 250
 DELETE_MARKED_ISSUES_BATCH_SIZE = 250
+MARK_STALE_UNRESOLVED_ISSUES_BATCH_SIZE = 250
 
 
 def get_orphaned_issues(cutoff=None):
@@ -16,6 +21,59 @@ def get_orphaned_issues(cutoff=None):
     if cutoff is not None:
         queryset = queryset.filter(last_seen__lt=cutoff)
     return queryset
+
+
+def get_stale_unresolved_issues(project, cutoff, include_muted=False):
+    from .models import Issue
+
+    queryset = Issue.objects.filter(project=project, is_deleted=False, is_resolved=False, last_seen__lt=cutoff)
+    if not include_muted:
+        queryset = queryset.filter(is_muted=False)
+    return queryset
+
+
+def mark_stale_unresolved_issues_for_project_sync(project):
+    from projects.models import StaleIssueDeletionScope
+
+    from .models import mark_issues_for_deletion
+
+    if project.stale_issue_max_age_days <= 0:
+        return
+
+    cutoff = timezone.now() - timedelta(days=project.stale_issue_max_age_days)
+    include_muted = project.stale_issue_deletion_scope == StaleIssueDeletionScope.UNRESOLVED_AND_MUTED
+
+    min_issue_id = None
+    while True:
+        with immediate_atomic():
+            queryset = get_stale_unresolved_issues(project, cutoff, include_muted)
+            if min_issue_id is not None:
+                queryset = queryset.filter(id__gt=min_issue_id)
+
+            issue_project_pairs = list(
+                queryset.order_by("id").values_list("id", "project_id")[:MARK_STALE_UNRESOLVED_ISSUES_BATCH_SIZE]
+            )
+            if not issue_project_pairs:
+                return
+
+            mark_issues_for_deletion(issue_project_pairs)
+            min_issue_id = issue_project_pairs[-1][0]
+
+
+def mark_stale_unresolved_issues_sync(project_id=None):
+    from projects.models import Project
+
+    queryset = Project.objects.filter(stale_issue_max_age_days__gt=0)
+    if project_id is not None:
+        queryset = queryset.filter(id=project_id)
+
+    for project in queryset:
+        mark_stale_unresolved_issues_for_project_sync(project)
+
+
+def cleanup_stale_unresolved_issues_sync(project_id=None):
+    mark_stale_unresolved_issues_sync(project_id)
+    delete_marked_issues_sync()
 
 
 def mark_orphaned_issues_sync(cutoff=None):

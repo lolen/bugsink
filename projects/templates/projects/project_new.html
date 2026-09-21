@@ -20,6 +20,8 @@
         {% tailwind_formfield form.name %}
         {% tailwind_formfield form.visibility %}
         {% tailwind_formfield form.retention_max_event_count %}
+        {% tailwind_formfield form.stale_issue_max_age_days %}
+        {% tailwind_formfield form.stale_issue_deletion_scope %}
         {% tailwind_formfield form.grouping_mechanism %}
 
         <button name="action" value="invite" class="font-bold text-accent-ink border-accent h-9 px-3 text-sm inline-flex items-center justify-center border bg-accent hover:brightness-110 active:ring-3 rounded-md">{% translate "Save" %}</button>

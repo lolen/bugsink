@@ -90,6 +90,8 @@ class ProjectForm(forms.ModelForm):
         self.old_grouping_mechanism = None
 
         self.fields["retention_max_event_count"].help_text = _("The maximum number of events to store before evicting.")
+        self.fields["stale_issue_max_age_days"].help_text = _(
+            "Automatically delete unresolved issues that have not been seen for this many days. 0 disables this.")
 
         maxes = []
         if get_settings().MAX_RETENTION_PER_PROJECT_EVENT_COUNT is not None:
@@ -158,7 +160,10 @@ class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
 
-        fields = ["team", "name", "visibility", "retention_max_event_count", "grouping_mechanism"]
+        fields = [
+            "team", "name", "visibility", "retention_max_event_count", "stale_issue_max_age_days",
+            "stale_issue_deletion_scope", "grouping_mechanism",
+        ]
         # slug is shown read-only via an explicit (declared) field for edit; creation auto-generates it on the model.
         # If we ever make slug editable, we'd want JS like django/contrib/admin/static/admin/js/prepopulate.js.
 

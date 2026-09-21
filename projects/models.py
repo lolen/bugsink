@@ -75,6 +75,11 @@ class ProjectVisibility(models.IntegerChoices):
     # HIDDEN
 
 
+class StaleIssueDeletionScope(models.IntegerChoices):
+    UNRESOLVED_ONLY = 0, _("Unresolved only")
+    UNRESOLVED_AND_MUTED = 1, _("Unresolved and muted")
+
+
 class Project(models.Model):
     # id is implied which makes it an Integer; we would prefer a uuid but the sentry clients have int baked into the DSN
     # parser (we could also introduce a special field for that purpose but that's ugly too)
@@ -125,6 +130,13 @@ class Project(models.Model):
 
     # retention
     retention_max_event_count = models.PositiveIntegerField(_("Retention max event count"), default=10_000)
+
+    # stale (unresolved) issue deletion
+    stale_issue_max_age_days = models.PositiveIntegerField(
+        _("Delete unresolved issues after (days)"), default=0)
+    stale_issue_deletion_scope = models.IntegerField(
+        _("Which issues count as stale"),
+        choices=StaleIssueDeletionScope.choices, default=StaleIssueDeletionScope.UNRESOLVED_ONLY)
 
     # grouping policy
     grouping_mechanism = models.CharField(

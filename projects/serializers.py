@@ -9,14 +9,16 @@ from teams.models import Team
 from bugsink.api_mixins import ExpandableSerializerMixin
 
 from teams.serializers import TeamDetailSerializer
-from .models import Project, ProjectVisibility
+from .models import Project, ProjectVisibility, StaleIssueDeletionScope
 
 
 ProjectVisibilityField = make_enum_field(ProjectVisibility)
+StaleIssueDeletionScopeField = make_enum_field(StaleIssueDeletionScope)
 
 
 class ProjectListSerializer(UTCModelSerializer):
     visibility = ProjectVisibilityField()
+    stale_issue_deletion_scope = StaleIssueDeletionScopeField()
     dsn = serializers.CharField(read_only=True)
 
     class Meta:
@@ -34,6 +36,8 @@ class ProjectListSerializer(UTCModelSerializer):
             "alert_on_unmute",
             "visibility",
             "retention_max_event_count",
+            "stale_issue_max_age_days",
+            "stale_issue_deletion_scope",
             "grouping_mechanism",
         ]
 
@@ -41,6 +45,7 @@ class ProjectListSerializer(UTCModelSerializer):
 class ProjectDetailSerializer(ExpandableSerializerMixin, UTCModelSerializer):
     expandable_fields = {"team": TeamDetailSerializer}
     visibility = ProjectVisibilityField()
+    stale_issue_deletion_scope = StaleIssueDeletionScopeField()
     dsn = serializers.CharField(read_only=True)
 
     class Meta:
@@ -58,6 +63,8 @@ class ProjectDetailSerializer(ExpandableSerializerMixin, UTCModelSerializer):
             "alert_on_unmute",
             "visibility",
             "retention_max_event_count",
+            "stale_issue_max_age_days",
+            "stale_issue_deletion_scope",
             "grouping_mechanism",
         ]
 
@@ -66,6 +73,7 @@ class ProjectCreateUpdateSerializer(UTCModelSerializer):
     id = serializers.UUIDField(read_only=True)
     team = serializers.PrimaryKeyRelatedField(queryset=Team.objects.all())
     visibility = ProjectVisibilityField(required=False)
+    stale_issue_deletion_scope = StaleIssueDeletionScopeField(required=False)
 
     class Meta:
         model = Project
@@ -79,6 +87,8 @@ class ProjectCreateUpdateSerializer(UTCModelSerializer):
             "alert_on_regression",
             "alert_on_unmute",
             "retention_max_event_count",
+            "stale_issue_max_age_days",
+            "stale_issue_deletion_scope",
             # "slug", auto-generated for uniqueness
             # "is_deleted", must go through delete_deferred()
             # "digested_event_count",  system-managed counter
@@ -96,6 +106,7 @@ class ProjectCreateUpdateSerializer(UTCModelSerializer):
             "alert_on_regression": {"required": False},
             "alert_on_unmute": {"required": False},
             "retention_max_event_count": {"required": False},
+            "stale_issue_max_age_days": {"required": False},
         }
 
     def validate_retention_max_event_count(self, value):

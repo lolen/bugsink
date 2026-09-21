@@ -108,6 +108,23 @@ class VacuumCommandTestCase(TransactionTestCase):
         with self.assertRaisesMessage(CommandError, "--orphaned-issue-max-days must be 0 or greater."):
             call_command("vacuum", "--orphaned-issues", "--orphaned-issue-max-days", "-1")
 
+    def test_vacuum_deletes_stale_unresolved_issues_by_default_when_configured(self):
+        project = Project.objects.create(name="Stale", issue_count=2, stale_issue_max_age_days=10)
+        stale, _ = get_or_create_issue(project, {"exception": {"values": [{"type": "Stale"}]}})
+        create_event(project, issue=stale)
+        recent, _ = get_or_create_issue(project, {"exception": {"values": [{"type": "Recent"}]}})
+        create_event(project, issue=recent)
+        now = timezone.now()
+        Issue.objects.filter(id=stale.id).update(last_seen=now - timedelta(days=20), stored_event_count=1)
+        Issue.objects.filter(id=recent.id).update(last_seen=now - timedelta(days=5), stored_event_count=1)
+        stdout = io.StringIO()
+
+        call_command("vacuum", stdout=stdout)
+
+        self.assertFalse(Issue.objects.filter(id=stale.id).exists())
+        self.assertTrue(Issue.objects.filter(id=recent.id).exists())
+        self.assertIn("Vacuuming stale unresolved issues", stdout.getvalue())
+
     def test_vacuum_deletes_old_events_before_finding_orphaned_issues(self):
         project = Project.objects.create(
             name="Old event",
