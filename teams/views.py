@@ -25,7 +25,6 @@ from .models import (
     Team,
     TeamMembership,
     TeamRole,
-    TeamVisibility,
     teams_visible_to_user,
     user_can_create_team,
     user_is_team_admin,

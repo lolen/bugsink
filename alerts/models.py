@@ -9,7 +9,6 @@ from .service_backends.msteams import MsTeamsBackend
 from .service_backends.telegram import TelegramBackend
 from .service_backends.google_chat import GoogleChatBackend
 from .service_backends.custom import CustomBackend
-from .service_backends.msteams import MsTeamsBackend
 
 
 def get_alert_service_kind_choices():
