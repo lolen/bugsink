@@ -1,12 +1,92 @@
 # Changes
 
-## 2.x.x (to be released)
+## 2.6.0 (15 September 2026)
+
+### Scoped API tokens
+
+Users can now create personal API tokens that follow their current permissions, optionally limited to one project.
+Each token has an explicit set of capabilities, such as reading issues, triaging them or uploading debug files.
+Superusers can also create service tokens for integrations that should operate independently of a user account.
+These limits are enforced in both the canonical and Sentry-compatible APIs, and endpoint requirements are included
+in the OpenAPI documentation. See #216.
+
+Existing tokens keep their full installation-wide access after upgrading. Tokens can be revoked from the token list.
+
+### Request-URL search
+
+Issue and event searches can now filter by request URL, for example `url:"https://example.org/checkout"`. URLs are stored
+as tags for newly ingested events, with query strings and fragments removed so equivalent pages share a value.
+See #269.
+
+### Alert destinations
+
+Alerts can now be sent to Google Chat spaces using incoming webhooks. See #326.
+
+### Smaller fixes
+
+* Show newest events first in an issue's event list, including filtered results, see #485.
+* Show friendly issue IDs in project issue lists, see #509.
+* Apply Docker SMTP environment settings when `EMAIL_BACKEND` is explicitly configured, and allow `EMAIL_LOGGING`
+  independently of SMTP configuration. Selecting SMTP without `EMAIL_HOST` now uses localhost with port 587 and TLS
+  by default. See #502.
+* Tell SDKs to stop sending unsupported transaction and span data, reducing unnecessary ingestion traffic, see #500.
+* Parse quoted search terms consistently, including colons in values and escaped quotes, see #501.
+* Prevent project updates through the canonical API from moving a project to another team, see #216.
+* Update Gunicorn to 26.2, Django REST Framework to 3.18 and Pygments to 2.21, see #498, #486 and #489.
+
+## 2.5.1 (31 August 2026)
 
 ### Backwards incompatible changes
 
 Some _very ancient_ migration files, long since squashed and replaced, have been removed. In the unlikely event that
 you are running a pre-1.2.0 release and have not yet run migrations, you will need to upgrade to any release from 1.2.0
-to 2.5.0 and run migrations, before upgrading to [2.x.x] or later.
+to 2.5.0 and run migrations before upgrading to 2.5.1 or later. See #470.
+
+### Security
+
+Fix: enforce the configured lifetime for email verification, password-reset and new-user setup links.
+
+The lifetime setting is expressed in seconds but was interpreted as days, so unused links remained valid far beyond
+their configured expiry. Bugsink now expires them after the configured number of seconds. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-4f45-qmjf-82cv
+
+Fix: reject webhook targets with non-global IPv4 addresses embedded in IPv6 destinations.
+
+On installations with NAT64 routing, a project admin could use a globally classified IPv6 address that translated to
+a private, loopback or link-local IPv4 destination. Bugsink now applies the global-address requirement to IPv4
+addresses embedded in standard IPv6 transition formats. See:
+
+https://github.com/bugsink/bugsink/security/advisories/GHSA-qxqr-25p3-664q
+
+### Alert destinations
+
+Alerts can now be sent to Telegram, Microsoft Teams and custom webhook endpoints. Telegram supports channels, groups
+and topics, Microsoft Teams uses Power Automate Workflows, and custom webhooks receive a payload based on the canonical
+issue API. See #368, #433 and #461.
+
+### Stacktraces and log messages
+
+Log-message issues now use the actual message as their title instead of the generic "Log Message" label, including the
+formatted message when an SDK provides one. See #111 and #364.
+
+Stacktrace views now render thread-based stacktraces from message and log events, show multiple threads alongside
+exceptions, and support the deprecated top-level event stacktrace. See #471 and #482.
+
+### Smaller fixes
+
+* Accept events that do not specify a platform, see #474.
+* Remove the broken, Python-specific plain-text event view; the Markdown view remains available, see #473.
+* Only accepted team members can join team projects, and send issue alerts only to accepted, active members, see #481.
+* Hide raw exception details from production error responses when `MINIMIZE_INFORMATION_EXPOSURE` is enabled, see
+  #481.
+* Parse `USE_ADMIN` as a boolean in Docker settings, so values such as `False` no longer enable it, see #481.
+* Clean up minidump files from minidump-only envelopes, see 5b09ae57.
+* Correct the artifact-upload authentication error message to name the expected Bearer scheme, see #488.
+* Update `fastjsonschema` to 2.22, see #476.
+* Simplify development by keeping events in the database instead of an event filestore, see 14f24309.
+* Update development-only Tailwind dependencies and keep pre-commit builds in sync with the lockfile, see 03e33bec and
+  f50c0dd8.
 
 ## 2.5.0 (21 July 2026)
 

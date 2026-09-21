@@ -1,5 +1,6 @@
 from django.db.models import Sum
 from rest_framework import serializers
+from rest_framework.validators import UniqueTogetherValidator
 
 from bugsink.api_serializers import UTCModelSerializer
 from bugsink.api_fields import make_enum_field
@@ -69,7 +70,7 @@ class ProjectDetailSerializer(ExpandableSerializerMixin, UTCModelSerializer):
         ]
 
 
-class ProjectCreateUpdateSerializer(UTCModelSerializer):
+class ProjectCreateSerializer(UTCModelSerializer):
     id = serializers.UUIDField(read_only=True)
     team = serializers.PrimaryKeyRelatedField(queryset=Team.objects.all())
     visibility = ProjectVisibilityField(required=False)
@@ -139,3 +140,10 @@ class ProjectCreateUpdateSerializer(UTCModelSerializer):
                 )
 
         return value
+
+
+class ProjectUpdateSerializer(ProjectCreateSerializer):
+    team = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta(ProjectCreateSerializer.Meta):
+        validators = [UniqueTogetherValidator(queryset=Project.objects.all(), fields=("team", "name"))]

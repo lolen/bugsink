@@ -20,10 +20,7 @@
         <h1 class="text-4xl font-bold tracking-tight mt-4">{% translate "Auth Tokens" %}</h1>
 
         <div class="ml-auto">
-            <form action="{% url "auth_token_create" %}" method="post">
-            {% csrf_token %}
-                <button class="font-bold text-accent-ink border-accent h-9 px-3 text-sm inline-flex items-center justify-center border bg-accent hover:brightness-110 active:ring-3 rounded-md">{% translate "Add Token" %}</button>
-            </form>
+            <a href="{% url "auth_token_create" %}" class="font-bold text-accent-ink border-accent h-9 px-3 text-sm inline-flex items-center justify-center border bg-accent hover:brightness-110 active:ring-3 rounded-md">{% translate "Add Token" %}</a>
         </div>
     </div>
 
@@ -51,24 +48,44 @@
                             <span id="token-hide-label-{{ auth_token.id }}" class="hidden">{% translate "Hide" %}</span>
                         </button>
                     </div>
-                    <div class="mt-1" id="description-view-{{ auth_token.id }}">
-                        {% if auth_token.description %}
-                        <span class="text-ink-muted text-sm">{{ auth_token.description }}</span>
-                        <button type="button" onclick="showEditDescription({{ auth_token.id }})" class="ml-2 text-ink-muted hover:text-ink-dim text-sm underline">{% translate "Edit" %}</button>
+                    <div class="mt-2 font-bold text-ink">
+                        {{ auth_token.description }}
+                    </div>
+                    <div class="mt-1 text-ink-muted text-sm">
+                        {% if auth_token.is_user_bound %}
+                            {% translate "Personal token for" %}
+                            {% if auth_token.user %}{{ auth_token.user }}{% else %}{% translate "deleted user" %}{% endif %}
                         {% else %}
-                        <button type="button" onclick="showEditDescription({{ auth_token.id }})" class="text-ink-muted hover:text-ink-dim text-sm underline">{% translate "Add description" %}</button>
+                            {% translate "Service token" %}
+                        {% endif %}
+                        ·
+                        {% if auth_token.is_project_bound %}
+                            {{ auth_token.project }}
+                        {% elif auth_token.is_user_bound %}
+                            {% translate "All my projects" %}
+                        {% else %}
+                            {% translate "All projects" %}
                         {% endif %}
                     </div>
-                    <div class="mt-1 hidden" id="description-edit-{{ auth_token.id }}">
-                        <input type="text" name="description-{{ auth_token.id }}" value="{{ auth_token.description }}" maxlength="255" class="border border-edge rounded-md px-2 py-1 text-sm w-80 bg-surface text-ink" id="description-input-{{ auth_token.id }}">
-                        <button type="submit" name="action" value="update_description:{{ auth_token.id }}" class="inline-block ml-2 text-sm font-bold text-ink-muted border-edge h-8 px-3 border hover:bg-raised active:ring-3 rounded-md inline-flex items-center justify-center">{% translate "Save" %}</button>
-                        <button type="button" onclick="hideEditDescription({{ auth_token.id }})" class="inline-block ml-2 text-sm font-bold text-ink-muted border-edge h-8 px-3 border hover:bg-raised active:ring-3 rounded-md inline-flex items-center justify-center">{% translate "Cancel" %}</button>
+                    <div class="mt-2 text-ink-muted text-sm">
+                        {% if auth_token.has_all_capabilities %}
+                            <span class="font-bold">{% translate "All capabilities" %}</span>
+                        {% elif auth_token.capability_groups %}
+                            <div class="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-2">
+                                {% for prefix, names in auth_token.capability_groups %}
+                                    <code class="text-right">{{ prefix }}:</code>
+                                    <code>({{ names|join:", " }})</code>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            {% translate "No capabilities" %}
+                        {% endif %}
                     </div>
                 </td>
 
                 <td class="py-3 px-4">
                     <div class="flex justify-end">
-                        <button name="action" value="delete:{{ auth_token.id }}" class="font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center border hover:bg-raised active:ring-3 rounded-md whitespace-nowrap">{% translate "Delete" %}</button>
+                        <button name="action" value="revoke:{{ auth_token.id }}" class="font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center border hover:bg-raised active:ring-3 rounded-md whitespace-nowrap">{% translate "Revoke" %}</button>
                     </div>
                 </td>
 
@@ -104,16 +121,6 @@ function toggleAuthToken(id) {
     toggleButton.setAttribute('aria-expanded', reveal);
 }
 
-function showEditDescription(id) {
-    document.getElementById('description-view-' + id).classList.add('hidden');
-    document.getElementById('description-edit-' + id).classList.remove('hidden');
-    document.getElementById('description-input-' + id).focus();
-}
-
-function hideEditDescription(id) {
-    document.getElementById('description-edit-' + id).classList.add('hidden');
-    document.getElementById('description-view-' + id).classList.remove('hidden');
-}
 </script>
 
 {% endblock %}

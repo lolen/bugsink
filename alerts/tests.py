@@ -1,5 +1,6 @@
 from django.test import TestCase as DjangoTestCase
 from unittest.mock import patch, Mock
+import ipaddress
 import json
 import requests
 import socket
@@ -31,8 +32,13 @@ from .service_backends.telegram import (
     telegram_backend_send_alert,
     telegram_backend_send_test_message,
 )
+from .service_backends.google_chat import (
+    GoogleChatConfigForm,
+    google_chat_backend_send_alert,
+    google_chat_backend_send_test_message,
+)
 from .service_backends.custom import CustomBackendForm, custom_backend_send_test_message, custom_backend_send_alert
-from .service_backends.webhook_security import validate_webhook_url
+from .service_backends.webhook_security import _embedded_ipv4_addresses, validate_webhook_url
 from .tasks import send_new_issue_alert, send_regression_alert, send_unmute_alert, _get_users_for_email_alert
 from .views import DEBUG_CONTEXTS
 from bugsink.app_settings import override_settings as override_bugsink_settings
@@ -985,7 +991,22 @@ class TestCustomBackendErrorHandling(DjangoTestCase):
         self.config.save()
         self.assertFalse(self.config.has_recent_failure())
 
+
 class TestWebhookSecurityValidation(DjangoTestCase):
+    def test_extracts_embedded_ipv4_addresses(self):
+        cases = {
+            "93.184.216.34": [],
+            "::ffff:127.0.0.1": ["127.0.0.1"],
+            "64:ff9b::a9fe:a9fe": ["169.254.169.254"],
+            "2002:c0a8:0101::1": ["192.168.1.1"],
+            "2001:0000:4136:e378:8000:63bf:3f57:fefe": ["65.54.227.120", "192.168.1.1"],
+        }
+
+        for address, expected in cases.items():
+            with self.subTest(address=address):
+                embedded = _embedded_ipv4_addresses(ipaddress.ip_address(address))
+                self.assertEqual(expected, [str(item) for item in embedded])
+
     def test_safe_post_does_not_re_resolve_after_validation(self):
         original_getaddrinfo = socket.getaddrinfo
         calls = []
@@ -1026,6 +1047,20 @@ class TestWebhookSecurityValidation(DjangoTestCase):
         with override_bugsink_settings(ALERTS_WEBHOOK_OUTBOUND_MODE="open"):
             with self.assertRaisesRegex(ValueError, "non-global IP address"):
                 validate_webhook_url("http://[::ffff:127.0.0.1]/hooks/example")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_rejects_nat64_address_with_non_global_embedded_ipv4(self, mock_resolve):
+        for address in ["64:ff9b::127.0.0.1", "64:ff9b::10.0.0.1", "64:ff9b::169.254.169.254"]:
+            with self.subTest(address=address):
+                mock_resolve.return_value = {address}
+                with self.assertRaisesRegex(ValueError, "non-global IP address"):
+                    validate_webhook_url("https://hooks.example.com/webhook")
+
+    @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
+    def test_allows_nat64_address_with_global_embedded_ipv4(self, mock_resolve):
+        mock_resolve.return_value = {"64:ff9b::93.184.216.34"}
+
+        validate_webhook_url("https://hooks.example.com/webhook")
 
     @patch("alerts.service_backends.webhook_security._resolve_ip_addresses")
     def test_rejects_hostname_that_resolves_to_private_ip(self, mock_resolve):
@@ -1235,3 +1270,133 @@ class TestWebhookConfigForms(DjangoTestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn("non-global IP address", form.errors["webhook_url"][0])
+
+    def test_google_chat_form_rejects_blocked_target(self):
+        form = GoogleChatConfigForm(data={"webhook_url": "http://10.0.0.42/hooks/test"})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("non-global IP address", form.errors["webhook_url"][0])
+
+
+class TestGoogleChatBackendErrorHandling(DjangoTestCase):
+    webhook_url = "https://chat.googleapis.com/v1/spaces/test/messages"
+
+    def setUp(self):
+        self.project = Project.objects.create(name="Test project")
+        self.config = MessagingServiceConfig.objects.create(
+            project=self.project,
+            display_name="Test Google Chat",
+            kind="google_chat",
+            config=json.dumps({"webhook_url": self.webhook_url}),
+        )
+
+    def _send_test(self):
+        google_chat_backend_send_test_message(
+            self.webhook_url, "Test project", "Test Google Chat", self.config.id)
+
+    def _ok_response(self):
+        response = Mock(status_code=200)
+        response.raise_for_status.return_value = None
+        return response
+
+    def _http_error(self, status_code, text):
+        response = Mock(status_code=status_code, text=text)
+        error = requests.HTTPError()
+        error.response = response
+        response.raise_for_status.side_effect = error
+        return response
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_google_chat_test_message_success_clears_failure_status(self, mock_post):
+        self.config.last_failure_timestamp = timezone.now()
+        self.config.last_failure_status_code = 500
+        self.config.last_failure_response_text = "Server Error"
+        self.config.save()
+        mock_post.return_value = self._ok_response()
+
+        self._send_test()
+
+        self.config.refresh_from_db()
+        self.assertIsNone(self.config.last_failure_timestamp)
+        self.assertIsNone(self.config.last_failure_status_code)
+        self.assertIsNone(self.config.last_failure_response_text)
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_google_chat_test_message_http_error_stores_failure(self, mock_post):
+        error_text = '{"error": {"code": 404, "message": "Space not found"}}'
+        mock_post.return_value = self._http_error(404, error_text)
+
+        self._send_test()
+
+        self.config.refresh_from_db()
+        self.assertIsNotNone(self.config.last_failure_timestamp)
+        self.assertEqual(self.config.last_failure_status_code, 404)
+        self.assertEqual(self.config.last_failure_response_text, error_text)
+        self.assertTrue(self.config.last_failure_is_json)
+        self.assertEqual(self.config.last_failure_error_type, "HTTPError")
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_google_chat_test_message_non_json_error_stores_failure(self, mock_post):
+        mock_post.return_value = self._http_error(500, "Internal Server Error")
+
+        self._send_test()
+
+        self.config.refresh_from_db()
+        self.assertIsNotNone(self.config.last_failure_timestamp)
+        self.assertEqual(self.config.last_failure_status_code, 500)
+        self.assertEqual(self.config.last_failure_response_text, "Internal Server Error")
+        self.assertFalse(self.config.last_failure_is_json)
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_google_chat_test_message_connection_error_stores_failure(self, mock_post):
+        mock_post.side_effect = requests.ConnectionError("Connection failed")
+
+        self._send_test()
+
+        self.config.refresh_from_db()
+        self.assertIsNotNone(self.config.last_failure_timestamp)
+        self.assertIsNone(self.config.last_failure_status_code)
+        self.assertIsNone(self.config.last_failure_response_text)
+        self.assertIsNone(self.config.last_failure_is_json)
+        self.assertEqual(self.config.last_failure_error_type, "ConnectionError")
+        self.assertEqual(self.config.last_failure_error_message, "Connection failed")
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_google_chat_alert_message_success_clears_failure_status(self, mock_post):
+        self.config.last_failure_timestamp = timezone.now()
+        self.config.last_failure_status_code = 500
+        self.config.save()
+        issue, _ = get_or_create_issue(project=self.project)
+        mock_post.return_value = self._ok_response()
+
+        google_chat_backend_send_alert(
+            self.webhook_url, issue.id, "New issue", "a", "NEW", self.config.id)
+
+        self.config.refresh_from_db()
+        self.assertIsNone(self.config.last_failure_timestamp)
+
+    @patch("alerts.service_backends.base.requests.post")
+    def test_google_chat_test_message_blocked_target_stores_failure_without_network_call(self, mock_post):
+        google_chat_backend_send_test_message(
+            "http://10.0.0.42/hooks/test", "Test project", "Test Google Chat", self.config.id)
+
+        mock_post.assert_not_called()
+        self.config.refresh_from_db()
+        self.assertEqual(self.config.last_failure_error_type, "ValueError")
+        self.assertIn("non-global IP address", self.config.last_failure_error_message)
+
+    @patch("alerts.service_backends.base.BaseWebhookBackend.safe_post")
+    def test_google_chat_alert_escapes_markdown_and_keeps_issue_link(self, mock_post):
+        self.project.name = "Ops *on-call* <prod>"
+        self.project.save()
+        issue, _ = get_or_create_issue(project=self.project)
+        mock_post.return_value = self._ok_response()
+
+        google_chat_backend_send_alert(
+            self.webhook_url, issue.id, "New issue", "a", "NEW", self.config.id,
+            unmute_reason="matched *pattern*")
+
+        payload = json.loads(mock_post.call_args.kwargs["data"])
+        self.assertIn(r"Ops \*on-call\* \<prod\>", payload["text"])
+        self.assertIn(r"matched \*pattern\*", payload["text"])
+        self.assertRegex(payload["text"], r"<https?://.+\|view on Bugsink>")
