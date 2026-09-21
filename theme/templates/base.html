@@ -71,12 +71,12 @@
 
                   {% if user.is_superuser %}
                   <a href="{{ script_prefix }}/users/" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Users" %}</a>
-                  <a href="{{ script_prefix }}/bsmain/auth_tokens/" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Tokens" %}</a>
                   {% endif %}
 
                   {% if logged_in_user.is_anonymous %}
                   <a href="{{ script_prefix }}/accounts/login/" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Login" %}</a>
                   {% else %}
+                  <a href="{{ script_prefix }}/bsmain/auth_tokens/" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Tokens" %}</a>
                   <a href="{{ script_prefix }}/api/canonical/0/schema/swagger-ui/" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "OpenAPI" %}</a>
                   <a href="{{ script_prefix }}/accounts/preferences/" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">{% translate "Preferences" %}</a>
                   {% for extra_nav_link in extra_nav_links %}
@@ -132,6 +132,7 @@
                         <summary class="list-none cursor-pointer h-8 w-8 rounded-full bg-raised border border-edge flex items-center justify-center text-xs font-bold text-ink-dim hover:text-ink">{{ user.username|slice:":2"|upper }}</summary>
                         <div class="mt-1 min-w-48 bg-surface border border-edge rounded-md shadow-lg py-1">
                             <a href="{{ script_prefix }}/accounts/preferences/" class="block px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{% translate "Preferences" %}</a>
+                            <a href="{{ script_prefix }}/bsmain/auth_tokens/" class="block px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{% translate "Tokens" %}</a>
                             <a href="{{ script_prefix }}/api/canonical/0/schema/swagger-ui/" class="block px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{% translate "OpenAPI" %}</a>
                             {% for extra_nav_link in extra_nav_links %}
                             <a href="{{ extra_nav_link.href }}" class="block px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{{ extra_nav_link.label }}</a>
@@ -141,7 +142,6 @@
                             {% endif %}
                             {% if user.is_superuser %}
                             <a href="{{ script_prefix }}/users/" class="block px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{% translate "Users" %}</a>
-                            <a href="{{ script_prefix }}/bsmain/auth_tokens/" class="block px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{% translate "Tokens" %}</a>
                             {% endif %}
                             <form id="logout-form" method="post" action="{% url 'logout' %}" class="border-t mt-1 pt-1">{% csrf_token %}<button type="submit" class="block w-full text-left px-4 py-2 text-sm text-ink-dim hover:bg-raised hover:text-ink">{% translate "Log out" %}</button></form>
                         </div>
