@@ -319,6 +319,16 @@ def project_members_invite(request, project_pk):
             user, user_created = User.objects.get_or_create(
                 email=email, defaults={'username': email, 'is_active': False})
 
+            if get_settings().AUTO_ADD_EXISTING_USERS and user.is_active:
+                ProjectMembership.objects.update_or_create(
+                    project=project, user=user, defaults={'accepted': True},
+                    create_defaults={'role': form.cleaned_data['role'], 'accepted': True})
+                messages.success(request, f"{email} was added to the project")
+
+                if request.POST.get('action') == "invite_and_add_another":
+                    return redirect('project_members_invite', project_pk=project_pk)
+                return redirect('project_members', project_pk=project_pk)
+
             if email_backend_delivers_mail():
                 _send_project_invite_email(user, project_pk)
                 invite_link = None

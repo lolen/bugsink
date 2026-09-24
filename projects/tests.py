@@ -193,6 +193,33 @@ class ProjectInviteLinkTestCase(TransactionTestCase):
         self.assertFalse(EmailVerification.objects.filter(user=user).exists())
         self.assertTrue(ProjectMembership.objects.filter(project=self.project, user=user, accepted=False).exists())
 
+    def test_auto_add_existing_users_adds_active_user_directly(self):
+        user = User.objects.create_user(
+            username="active-project-member@example.com", email="active-project-member@example.com")
+        ProjectMembership.objects.create(project=self.project, user=user, role=ProjectRole.MEMBER, accepted=False)
+
+        with override_bugsink_settings(AUTO_ADD_EXISTING_USERS=True):
+            response = self.client.post(reverse("project_members_invite", kwargs={"project_pk": self.project.pk}), {
+                "email": "active-project-member@example.com",
+                "role": ProjectRole.MEMBER,
+                "action": "invite",
+            }, follow=True)
+
+        self.assertContains(response, "active-project-member@example.com was added to the project")
+        self.assertTrue(ProjectMembership.objects.get(project=self.project, user=user).accepted)
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+    def test_auto_add_existing_users_still_invites_new_users(self):
+        with override_bugsink_settings(AUTO_ADD_EXISTING_USERS=True):
+            self.client.post(reverse("project_members_invite", kwargs={"project_pk": self.project.pk}), {
+                "email": "brand-new-project-member@example.com",
+                "role": ProjectRole.MEMBER,
+                "action": "invite",
+            })
+
+        user = User.objects.get(email="brand-new-project-member@example.com")
+        self.assertFalse(ProjectMembership.objects.get(project=self.project, user=user).accepted)
+
 
 class ProjectDeletionTestCase(TransactionTestCase):
 

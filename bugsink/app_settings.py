@@ -42,6 +42,9 @@ DEFAULTS = {
     "SINGLE_TEAM": False,
     "TEAM_CREATION": CB_MEMBERS,  # who can create new teams. default: members, which means "any member of the site"
 
+    # if True, inviting an existing (active) user to a project/team adds them directly, without an invitation to accept
+    "AUTO_ADD_EXISTING_USERS": False,
+
     # System inner workings:
     "VALIDATE_ON_DIGEST": "none",  # other legal values are "warn" and "strict"
     "KEEP_ENVELOPES": 0,  # set to a number to store that many; 0 means "store none". This is for debugging.

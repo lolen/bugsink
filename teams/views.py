@@ -248,6 +248,16 @@ def team_members_invite(request, team_pk):
             user, user_created = User.objects.get_or_create(
                 email=email, defaults={'username': email, 'is_active': False})
 
+            if get_settings().AUTO_ADD_EXISTING_USERS and user.is_active:
+                TeamMembership.objects.update_or_create(
+                    team=team, user=user, defaults={'accepted': True},
+                    create_defaults={'role': form.cleaned_data['role'], 'accepted': True})
+                messages.success(request, f"{email} was added to the team")
+
+                if request.POST.get('action') == "invite_and_add_another":
+                    return redirect('team_members_invite', team_pk=team_pk)
+                return redirect('team_members', team_pk=team_pk)
+
             if email_backend_delivers_mail():
                 _send_team_invite_email(user, team_pk)
                 invite_link = None

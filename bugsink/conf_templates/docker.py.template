@@ -148,6 +148,9 @@ BUGSINK = {
     "SINGLE_TEAM": os.getenv("SINGLE_TEAM", "False").lower() in ("true", "1", "yes"),
     "TEAM_CREATION": os.getenv("TEAM_CREATION", CB_MEMBERS),  # who can create new teams.
 
+    # if True, inviting an existing (active) user to a project/team adds them directly, without an invitation to accept
+    "AUTO_ADD_EXISTING_USERS": os.getenv("AUTO_ADD_EXISTING_USERS", "False").lower() in ("true", "1", "yes"),
+
     # MAX* below mirror the (current) values for the Sentry Relay.
     "MAX_EVENT_SIZE": int(os.getenv("MAX_EVENT_SIZE", _MEBIBYTE)),
     "MAX_EVENT_COMPRESSED_SIZE": int(os.getenv("MAX_EVENT_COMPRESSED_SIZE", 200 * _KIBIBYTE)),

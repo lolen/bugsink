@@ -204,6 +204,33 @@ class TeamInviteLinkTestCase(TransactionTestCase):
         self.assertFalse(EmailVerification.objects.filter(user=user).exists())
         self.assertTrue(TeamMembership.objects.filter(team=self.team, user=user, accepted=False).exists())
 
+    def test_auto_add_existing_users_adds_active_user_directly(self):
+        user = User.objects.create_user(
+            username="active-team-member@example.com", email="active-team-member@example.com")
+        TeamMembership.objects.create(team=self.team, user=user, role=TeamRole.MEMBER, accepted=False)
+
+        with override_bugsink_settings(AUTO_ADD_EXISTING_USERS=True):
+            response = self.client.post(reverse("team_members_invite", kwargs={"team_pk": self.team.pk}), {
+                "email": "active-team-member@example.com",
+                "role": TeamRole.MEMBER,
+                "action": "invite",
+            }, follow=True)
+
+        self.assertContains(response, "active-team-member@example.com was added to the team")
+        self.assertTrue(TeamMembership.objects.get(team=self.team, user=user).accepted)
+        self.assertFalse(EmailVerification.objects.filter(user=user).exists())
+
+    def test_auto_add_existing_users_still_invites_new_users(self):
+        with override_bugsink_settings(AUTO_ADD_EXISTING_USERS=True):
+            self.client.post(reverse("team_members_invite", kwargs={"team_pk": self.team.pk}), {
+                "email": "brand-new-team-member@example.com",
+                "role": TeamRole.MEMBER,
+                "action": "invite",
+            })
+
+        user = User.objects.get(email="brand-new-team-member@example.com")
+        self.assertFalse(TeamMembership.objects.get(team=self.team, user=user).accepted)
+
 
 class TeamScopedActionTestCase(TransactionTestCase):
 
