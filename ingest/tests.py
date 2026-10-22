@@ -12,9 +12,11 @@ from unittest import TestCase as RegularTestCase
 from dateutil.relativedelta import relativedelta
 
 from django.test import tag
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from django.test.client import RequestFactory
 from django.core.exceptions import ValidationError
+from django.db import connection
 
 from bugsink.test_utils import TransactionTestCase25251 as TransactionTestCase
 from bugsink.transaction import immediate_atomic
@@ -46,10 +48,10 @@ from phonehome.models import Installation
 from .views import BaseIngestAPIView, IngestSecurityAPIView, MinidumpAPIView, get_grouping_key_hash
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
+from .filestore import get_filename_for_event_id
+from .tasks import digest
 from .header_validators import (
     validate_envelope_headers, validate_item_headers, filter_valid_item_headers, filter_valid_envelope_headers)
-
-from bugsink.exceptions import ViolatedExpectation
 
 
 def _digest_params(event_data, project, request, now=None):
@@ -725,8 +727,12 @@ class IngestViewTestCase(TransactionTestCase):
             if type_ == "Foo":
                 check()
             else:
-                with self.assertRaises(ViolatedExpectation):
+                with self.assertLogs("bugsink.ingest", level="WARNING") as logs:
                     check()
+                self.assertIn("ValidationError in digest_event", logs.output[0])
+
+        self.assertEqual(1, Issue.objects.filter(project=project).count())
+        self.assertEqual(1, Event.objects.filter(project=project).count())
 
     def test_envelope_endpoint_brotli_bomb(self):
         project = Project.objects.create(name="test")
@@ -1356,6 +1362,73 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual("GroupingError + grouping value", Grouping.objects.get().grouping_key)  # proves actual use
 
 
+class DigestQuotaTestCase(TransactionTestCase):
+    # LLM-generated; not deeply inspected, but they do seem to cover the main cases we care about.
+
+    def setUp(self):
+        super().setUp()
+        self.project = Project.objects.create(name="test", alert_on_new_issue=False)
+
+    def exceed_quota(self, obj):
+        obj.quota_exceeded_until = timezone.now() + datetime.timedelta(minutes=5)
+        obj.quota_exceeded_reason = json.dumps(["minute", 5, 1])
+        obj.save()
+
+    def write_queued_event(self):
+        data = create_event_data()
+        metadata = {
+            "event_id": data["event_id"],
+            "ingestion_id": str(uuid.uuid4()),
+            "project_id": self.project.id,
+            "ingested_at": format_timestamp(timezone.now()),
+        }
+        with open(get_filename_for_event_id(metadata["ingestion_id"]), "w") as f:
+            json.dump(data, f)
+        return metadata
+
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=1)
+    def test_project_quota_sheds_without_transaction(self):
+        self.exceed_quota(self.project)
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            metadata = self.write_queued_event()
+            with CaptureQueriesContext(connection) as queries:
+                digest(metadata["event_id"], metadata)
+            self.assertEqual([], os.listdir(tempdir))
+
+        self.assertEqual([], [1 for q in queries.captured_queries if q["sql"].startswith("BEGIN")])
+        self.assertEqual(0, Event.objects.count())
+
+    @override_settings(MAX_EVENTS_PER_5_MINUTES=1)
+    def test_installation_quota_sheds_without_transaction(self):
+        self.exceed_quota(Installation.objects.get())
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            metadata = self.write_queued_event()
+            with CaptureQueriesContext(connection) as queries:
+                digest(metadata["event_id"], metadata)
+            self.assertEqual([], os.listdir(tempdir))
+
+        self.assertEqual([], [1 for q in queries.captured_queries if q["sql"].startswith("BEGIN")])
+        self.assertEqual(0, Event.objects.count())
+
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=1)
+    def test_zero_retention_still_schedules_cleanup_when_over_quota(self):
+        create_event(self.project)
+        self.project.stored_event_count = 1
+        self.project.retention_max_event_count = 0
+        self.exceed_quota(self.project)
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            metadata = self.write_queued_event()
+            with patch("events.tasks.delete_by_age_until_under_retention_max.delay") as cleanup_delay:
+                digest(metadata["event_id"], metadata)
+            self.assertEqual([], os.listdir(tempdir))
+
+        cleanup_delay.assert_called_once_with(self.project.id)
+        self.assertEqual(1, Event.objects.count())  # No incoming event was stored; deletion is queued.
+
+
 class IngestSecurityViewTestCase(TransactionTestCase):
     # Tests for the CSP report endpoint (POST /api/<project_pk>/security/). Goes through self.client so we exercise the
     # full URL routing, content-type check, auth, parse, digest path. TransactionTestCase because digest.delay() relies
@@ -1570,8 +1643,59 @@ class IngestSecurityViewUnitTestCase(RegularTestCase):
         self.assertEqual("123", result["request"]["url"])
 
 
+@tag("samples")
+class MinidumpIngestRegressionTestCase(TransactionTestCase):
+    # These tests use Snappea's TASK_ALWAYS_EAGER test setting. In production the response is returned before digest;
+    # here the request also proves that the queued digest succeeds and cleans up its ingestion files.
+
+    def setUp(self):
+        super().setUp()
+        self.project = Project.objects.create(name="minidump-test")
+        self.sentry_auth_header = get_header_value(
+            f"http://{self.project.sentry_key}@hostisignored/{self.project.id}")
+        self.minidump_filename = os.path.join(
+            os.getenv("SAMPLES_DIR", "../event-samples"), "minidumps", "linux_overflow.dmp")
+
+    def test_direct_minidump_endpoint_ingests_minidump(self):
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with open(self.minidump_filename, "rb") as minidump:
+                response = self.client.post(
+                    f"/api/{self.project.id}/minidump/",
+                    data={"upload_file_minidump": minidump},
+                    headers={"X-Sentry-Auth": self.sentry_auth_header},
+                )
+
+            self.assertEqual(200, response.status_code, response.content)
+            self.assertEqual(1, Event.objects.count())
+            self.assertEqual([], os.listdir(tempdir))
+
+    def test_minidump_only_envelope_does_not_duplicate_exceptions_regression(self):
+        # Regression test: minidump-only envelopes used to merge the dump before and during digest.
+        with open(self.minidump_filename, "rb") as minidump:
+            minidump_bytes = minidump.read()
+
+        event_id = uuid.uuid4().hex
+        envelope = (
+            b'{"event_id": "%s"}\n' % event_id.encode("utf-8") +
+            b'{"type": "attachment", "attachment_type": "event.minidump", "length": %d}\n'
+            % len(minidump_bytes) +
+            minidump_bytes
+        )
+
+        response = self.client.post(
+            f"/api/{self.project.id}/envelope/",
+            content_type="application/json",
+            headers={"X-Sentry-Auth": self.sentry_auth_header},
+            data=envelope,
+        )
+
+        self.assertEqual(200, response.status_code, response.content)
+        event_data = json.loads(Event.objects.get().get_raw_data())
+        self.assertEqual(1, len(event_data["exception"]["values"]))
+
+
 class MinidumpAPIViewTestCase(TransactionTestCase):
-    # NOTE: no tests for the _actual_ minidump processing just yet.
+    # Actual minidump processing is covered by MinidumpIngestRegressionTestCase; these are unit tests for POST data.
 
     def setUp(self):
         super().setUp()

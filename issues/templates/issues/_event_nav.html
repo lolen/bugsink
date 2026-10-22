@@ -2,7 +2,7 @@
 {% load i18n %}
 
                 <form action="{% url this_view issue_pk=issue.pk nav="last" %}" method="get">{# nav="last": when doing a new search on an event-page, you want the most recent matching event to show up #}
-                <input type="text" name="q" value="{{ q }}" placeholder="{% translate 'search...' %}" class="bg-surface border border-edge text-sm h-8 px-3 focus:border-accent focus:ring-accent-wash rounded-md mr-2"/>
+                {% include "theme/_search_input.html" with placeholder="search..." search_container_class="mr-2" %}
                 </form>
 
                 {% if has_prev %} {# no need for 'is_first': if you can go to the left, you can go all the way to the left too #}

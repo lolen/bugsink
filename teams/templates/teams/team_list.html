@@ -6,6 +6,8 @@
 
 {% block content %}
 
+{% include "teams/includes/leave_modal.html" %}
+
 <div class="m-4 flex flex-row items-end">
 
     <div>
@@ -20,6 +22,14 @@
 </div>
 
 <div class="m-4">
+
+{% if messages %}
+<ul class="mt-4 space-y-2">
+    {% for message in messages %}
+    <li class="bg-raised border border-edge border-l-4 {% if message.level_tag == "warning" %}border-l-warning{% else %}border-l-accent{% endif %} rounded-md p-4 text-sm">{{ message }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
 
 <div class="flex items-center gap-3 mt-4 flex-wrap">
     <div class="inline-flex gap-0.5 p-0.5 bg-raised border border-edge-soft rounded-md">
@@ -104,7 +114,7 @@
                     {% if not team.member.accepted %}
                         <a href="{% url 'team_members_accept' team_pk=team.id %}" class="font-bold text-accent whitespace-nowrap text-sm">{% translate "Invitation" %}</a>
                     {% else %}
-                        <button name="action" value="leave:{{ team.id }}" class="font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center border hover:bg-raised active:ring-3 rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
+                        <button type="button" data-leave-action="leave:{{ team.id }}" class="leave-button font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center border hover:bg-raised active:ring-3 rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
                     {% endif %}
                 {% else %}
                     {% if team.is_joinable or request.user.is_superuser %}
@@ -135,4 +145,5 @@
 
 {% block extra_js %}
     <script src="{% static 'js/team_list.js' %}"></script>
+    <script src="{% static 'js/team_leave.js' %}"></script>
 {% endblock %}

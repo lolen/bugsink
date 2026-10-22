@@ -6,6 +6,8 @@
 
 {% block content %}
 
+{% include "teams/includes/leave_modal.html" %}
+
 <div class="m-4">
 
     {% if messages %}
@@ -62,7 +64,7 @@
                         {% endif %}
                     {% endif %}
                     {% if request.user == member.user %}
-                        <button name="action" value="remove:{{ member.user_id }}" class="font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center border hover:bg-raised active:ring-3 rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
+                        <button type="button" data-leave-action="remove:{{ member.user_id }}" class="leave-button font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center border hover:bg-raised active:ring-3 rounded-md whitespace-nowrap">{% translate "Leave" %}</button>
                     {% else %}  {# NOTE: in our setup request_user_is_admin is implied because only admins may view the membership page #}
                         <button name="action" value="remove:{{ member.user_id }}" class="font-bold text-ink-muted border-edge h-9 px-3 text-sm inline-flex items-center justify-center border hover:bg-raised active:ring-3 rounded-md whitespace-nowrap">{% translate "Remove" %}</button>
                     {% endif %}
@@ -94,4 +96,5 @@
 
 {% block extra_js %}
 <script src="{% static 'js/copy.js' %}"></script>
+<script src="{% static 'js/team_leave.js' %}"></script>
 {% endblock %}

@@ -39,11 +39,11 @@ DEBUG_ID_SCAN_TAIL_SIZE = 64 * 1024
 
 def create_file_from_local_file(checksum, filename, size, local_file):
     write_storage = get_write_storage("file")
-    file, created = File.objects.get_or_create(
+    file, created = File.objects.defer("data").get_or_create(
         checksum=checksum,
         defaults={
             "size": size,
-            "data": b"" if write_storage is not None else local_file.read(),
+            "data": b"" if write_storage is not None else local_file.read,
             "filename": filename,
             "storage_backend": None if write_storage is None else write_storage.name,
         })
@@ -199,7 +199,10 @@ def assemble_file(checksum, chunk_checksums, filename):
 
     chunks = Chunk.objects.filter(checksum__in=chunk_checksums)
     chunks_dicts = {chunk.checksum: chunk for chunk in chunks}
-    chunks_in_order = [chunks_dicts[checksum] for checksum in chunk_checksums]  # implicitly checks chunk availability
+
+    # The below fails when any chunk is missing but this "can't happen" because our endpoints does the check and also
+    # a renewal to avoid vacuuming. i.e. it only happens if our worker is late by 24h.
+    chunks_in_order = [chunks_dicts[checksum] for checksum in chunk_checksums]
     max_file_size = get_settings().MAX_FILE_SIZE
 
     with tempfile.TemporaryDirectory() as tempdir:
@@ -225,10 +228,6 @@ def assemble_file(checksum, chunk_checksums, filename):
             local_file.seek(0)
             file, created = create_file_from_local_file(checksum, filename, size, local_file)
 
-            # the assumption here is: chunks are basically use-once, so we can delete them after use. "in theory" a
-            # chunk may be used in multiple files (which are still being assembled) but with chunksizes in the order
-            # of 1MiB, I'd say this is unlikely.
-            chunks.delete()
             return file, created
 
 

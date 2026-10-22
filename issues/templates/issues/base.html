@@ -4,6 +4,7 @@
 {% load humanize %}
 {% load stricter_templates %}
 {% load add_to_qs %}
+{% load tag_search %}
 {% load i18n %}
 
 {% block title %}{{ issue.title }} · {{ block.super }}{% endblock %}
@@ -229,16 +230,16 @@
             <div class="px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-ink-muted bg-raised border-b border-edge">{% translate "Issue Tags" %}</div>
             <div class="p-4">
                 {% for issuetags in issue.tags_summary %}
-                    <a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/tags/{% current_qs %}" class="block mb-4">
+                    <div class="mb-4">
                         <div class="text-xs font-bold uppercase tracking-wide text-ink-muted mb-1.5">{{ issuetags.0.key.key }}</div>
                         {% for issuetag in issuetags %}
                         <div class="flex items-center gap-2 text-sm mt-1">
-                            <div class="min-w-0 flex-1 truncate text-ink-dim">{{ issuetag.value.value }}</div>
+                            <div class="min-w-0 flex-1 truncate text-ink-dim">{% if issuetag.is_other %}{{ issuetag.value.value }}{% else %}<a href="{% url 'issue_list_open' project_pk=issue.project_id %}?q={% tag_drilldown request.GET.q issuetags.0.key.key issuetag.value.value %}" class="hover:text-accent" title="{% translate "Filter issues by this tag" %}">{{ issuetag.value.value }}</a>{% endif %}</div>
                             <div class="w-16 h-1.5 bg-sunken rounded-full overflow-hidden shrink-0"><div class="h-full bg-accent rounded-full" style="width: {{ issuetag.pct }}%"></div></div>
                             <div class="w-9 shrink-0 text-right text-xs tabular-nums text-ink-muted">{{ issuetag.pct }}%</div>
                         </div>
                         {% endfor %}
-                    </a>
+                    </div>
                 {% endfor %}
 
                 <div class="text-sm font-bold text-accent"><a href="{{ script_prefix }}/issues/issue/{{ issue.id }}/tags/{% current_qs %}">{% translate "All tags..." %}</a></div>

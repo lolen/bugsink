@@ -5,7 +5,6 @@ from pygments import highlight
 from pygments.formatters import HtmlFormatter
 
 from django.utils.html import escape
-from django.utils.http import urlencode
 from django.utils.safestring import SafeData, mark_safe
 from django.template.defaultfilters import date
 
@@ -136,17 +135,6 @@ def pygmentize(value, platform):
     value['post_context'] = post_context
 
     return value
-
-
-@register.filter
-def tag_search_q(key, value):
-    """Builds an already-urlencoded '?q=...' fragment for jumping to the issue list filtered on this tag."""
-    value = str(value)
-    if value == "" or any(c.isspace() for c in value):
-        q = f'{key}:"{value}"'
-    else:
-        q = f'{key}:{value}'
-    return urlencode({"q": q})
 
 
 @register.filter(name='firstlineno')
