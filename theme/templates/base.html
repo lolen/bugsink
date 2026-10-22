@@ -61,7 +61,7 @@
 
                   {% if project %}
                   <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}" class="px-3 py-2 rounded-md text-sm text-ink-muted hover:bg-raised hover:text-ink">
-                    {{ project.name }}
+                    {% if project.team %}{{ project.team.name }} / {% endif %}{{ project.name }}
                   </a>
                   {% endif %}
 
@@ -112,7 +112,7 @@
                 <a href="{% url "global_issue_list_open" %}" class="px-3 py-1.5 rounded-md text-sm hover:bg-raised hover:text-ink {% if is_global_issue_list %}bg-raised text-ink font-bold{% else %}text-ink-muted{% endif %}">{% translate "Issues" %}</a>
 
                 {% if project %}
-                <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}" class="px-3 py-1.5 rounded-md text-sm hover:bg-raised hover:text-ink {% if project and not is_global_issue_list %}bg-raised text-ink font-bold{% else %}text-ink-muted{% endif %}">{{ project.name }}</a>
+                <a href="{% url "issue_list_open" project_pk=project.pk %}{% current_qs %}" class="px-3 py-1.5 rounded-md text-sm hover:bg-raised hover:text-ink {% if project and not is_global_issue_list %}bg-raised text-ink font-bold{% else %}text-ink-muted{% endif %}">{% if project.team %}{{ project.team.name }} / {% endif %}{{ project.name }}</a>
                 {% endif %}
 
                 <div class="ml-auto flex items-center gap-0.5">

@@ -18,7 +18,7 @@
 
     <div class="flex items-end gap-6 flex-wrap">
         <div>
-            <div class="text-sm text-ink-muted mt-4">{{ project.name }}</div>
+            <div class="text-sm text-ink-muted mt-4">{% if project.team %}{{ project.team.name }} / {% endif %}{{ project.name }}</div>
             <h1 class="text-4xl font-bold tracking-tight">{% translate "Alerts" %}</h1>
         </div>
         <div class="ml-auto">
