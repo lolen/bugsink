@@ -305,6 +305,7 @@ LOCALE_PATHS = [BASE_DIR / "locale"]
 LANGUAGES = (
     ("en", "English"),
     ("zh-hans", "简体中文"),
+    ("pl", "Polski"),
 )
 
 USE_TZ = True
