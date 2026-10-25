@@ -5,6 +5,8 @@ import io
 import uuid
 import time
 import tempfile
+import gzip
+import brotli
 
 import datetime
 from unittest.mock import patch
@@ -14,7 +16,7 @@ from dateutil.relativedelta import relativedelta
 from django.test import tag
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
-from django.test.client import RequestFactory
+from django.test.client import RequestFactory, BOUNDARY, MULTIPART_CONTENT, encode_multipart
 from django.core.exceptions import ValidationError
 from django.db import connection
 
@@ -44,12 +46,18 @@ from compat.timestamp import format_timestamp
 from compat.dsn import get_header_value
 from bsmain.management.commands.send_json import Command as SendJsonCommand
 from phonehome.models import Installation
+from sentry.minidump import merge_minidump_event
 
-from .views import BaseIngestAPIView, IngestSecurityAPIView, MinidumpAPIView, get_grouping_key_hash
+from .views import IngestSecurityAPIView, MinidumpAPIView
+from .digestion import (
+    count_installation_periods_and_act_on_it,
+    count_project_periods_and_act_on_it,
+    get_grouping_key_hash,
+)
 from .parsers import readuntil, NewlineFinder, ParseError, LengthFinder, StreamingEnvelopeParser
 from .event_counter import check_for_thresholds
 from .filestore import get_filename_for_event_id
-from .tasks import digest
+from .tasks import digest, digest_event
 from .header_validators import (
     validate_envelope_headers, validate_item_headers, filter_valid_item_headers, filter_valid_envelope_headers)
 
@@ -109,13 +117,13 @@ class IngestViewTestCase(TransactionTestCase):
             alert_on_unmute=False,
         )
 
-    @patch("ingest.views.send_new_issue_alert")
-    @patch("ingest.views.send_regression_alert")
+    @patch("ingest.tasks.send_new_issue_alert")
+    @patch("ingest.tasks.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
     def test_ingest_view_new_issue_alert(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.loud_project, request))
+        digest_event(**_digest_params(create_event_data(), self.loud_project, request))
 
         self.assertTrue(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
@@ -125,9 +133,9 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(1, TurningPoint.objects.count())
         self.assertEqual(TurningPointKind.FIRST_SEEN, TurningPoint.objects.first().kind)
 
-    @patch("ingest.views.BaseIngestAPIView.count_project_periods_and_act_on_it")
-    @patch("ingest.views.BaseIngestAPIView.count_installation_periods_and_act_on_it")
-    @patch("ingest.views.evict_for_max_events")
+    @patch("ingest.tasks.count_project_periods_and_act_on_it")
+    @patch("ingest.tasks.count_installation_periods_and_act_on_it")
+    @patch("ingest.tasks.evict_for_max_events")
     @patch("events.tasks.delete_by_age_until_under_retention_max.delay")
     def test_ingest_view_zero_retention_short_circuits(
             self, cleanup_delay, evict_for_max_events, count_installation, count_project):
@@ -136,7 +144,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+        digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
 
         self.assertFalse(count_installation.called)
         self.assertFalse(count_project.called)
@@ -145,8 +153,8 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(0, Event.objects.filter(project=self.quiet_project).count())
         self.assertEqual(0, Issue.objects.filter(project=self.quiet_project).count())
 
-    @patch("ingest.views.send_new_issue_alert")
-    @patch("ingest.views.send_regression_alert")
+    @patch("ingest.tasks.send_new_issue_alert")
+    @patch("ingest.tasks.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
     def test_ingest_view_regression_alert(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
         event_data = create_event_data()
@@ -157,7 +165,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.loud_project, request))
+        digest_event(**_digest_params(event_data, self.loud_project, request))
 
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertTrue(send_regression_alert.delay.called)
@@ -165,8 +173,8 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(1, TurningPoint.objects.count())
         self.assertEqual(TurningPointKind.REGRESSED, TurningPoint.objects.first().kind)
 
-    @patch("ingest.views.send_new_issue_alert")
-    @patch("ingest.views.send_regression_alert")
+    @patch("ingest.tasks.send_new_issue_alert")
+    @patch("ingest.tasks.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
     def test_ingest_view_funny_state(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
         # "funny", because we build an issue with a funny state (muted, resolved) on purpose to check that only a
@@ -182,7 +190,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.loud_project, request))
+        digest_event(**_digest_params(event_data, self.loud_project, request))
 
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertTrue(send_regression_alert.delay.called)
@@ -190,8 +198,8 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(1, TurningPoint.objects.count())
         self.assertEqual(TurningPointKind.REGRESSED, TurningPoint.objects.first().kind)
 
-    @patch("ingest.views.send_new_issue_alert")
-    @patch("ingest.views.send_regression_alert")
+    @patch("ingest.tasks.send_new_issue_alert")
+    @patch("ingest.tasks.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
     def test_ingest_view_unmute_alert_for_vbc(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
         event_data = create_event_data()
@@ -203,7 +211,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.loud_project, request))
+        digest_event(**_digest_params(event_data, self.loud_project, request))
 
         self.assertFalse(send_new_issue_alert.delay.called)
         self.assertFalse(send_regression_alert.delay.called)
@@ -214,8 +222,8 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(
             send_unmute_alert.delay.call_args[0][1], "More than 1 events per 1 day occurred, unmuting the issue.")
 
-    @patch("ingest.views.send_new_issue_alert")
-    @patch("ingest.views.send_regression_alert")
+    @patch("ingest.tasks.send_new_issue_alert")
+    @patch("ingest.tasks.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
     def test_ingest_view_unmute_alert_after_time(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
         event_data = create_event_data()
@@ -227,7 +235,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().digest_event(**_digest_params(
+        digest_event(**_digest_params(
             event_data,
             self.loud_project,
             request,
@@ -241,9 +249,9 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(send_unmute_alert.delay.call_args[0][0], str(issue.id))
         self.assertTrue("An event was observed after the mute-deadline of" in send_unmute_alert.delay.call_args[0][1])
 
-    @patch("ingest.views.BaseIngestAPIView.count_project_periods_and_act_on_it")
-    @patch("ingest.views.BaseIngestAPIView.count_installation_periods_and_act_on_it")
-    @patch("ingest.views.evict_for_max_events")
+    @patch("ingest.tasks.count_project_periods_and_act_on_it")
+    @patch("ingest.tasks.count_installation_periods_and_act_on_it")
+    @patch("ingest.tasks.evict_for_max_events")
     @patch("events.tasks.delete_by_age_until_under_retention_max.delay")
     def test_ingest_view_zero_retention_schedules_cleanup_for_stored_events(
             self, cleanup_delay, evict_for_max_events, count_installation, count_project):
@@ -260,15 +268,15 @@ class IngestViewTestCase(TransactionTestCase):
 
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+        digest_event(**_digest_params(event_data, self.quiet_project, request))
 
         self.assertFalse(count_installation.called)
         self.assertFalse(count_project.called)
         self.assertFalse(evict_for_max_events.called)
         cleanup_delay.assert_called_once_with(self.quiet_project.id)
 
-    @patch("ingest.views.send_new_issue_alert")
-    @patch("ingest.views.send_regression_alert")
+    @patch("ingest.tasks.send_new_issue_alert")
+    @patch("ingest.tasks.send_regression_alert")
     @patch("issues.models.send_unmute_alert")
     def test_ingest_view_no_alerts(self, send_unmute_alert, send_regression_alert, send_new_issue_alert):
         request = self.request_factory.post("/api/1/store/")
@@ -277,7 +285,7 @@ class IngestViewTestCase(TransactionTestCase):
         # doesn't silently break we've included the positive case in the loop here.
         for (expected_called, project) in [(False, self.quiet_project), (True, self.loud_project)]:
             # new event
-            BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), project, request))
+            digest_event(**_digest_params(create_event_data(), project, request))
 
             self.assertEqual(expected_called, send_new_issue_alert.delay.called)
 
@@ -286,7 +294,7 @@ class IngestViewTestCase(TransactionTestCase):
             issue.save()
 
             # regression
-            BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), project, request))
+            digest_event(**_digest_params(create_event_data(), project, request))
 
             self.assertEqual(expected_called, send_regression_alert.delay.called)
 
@@ -296,7 +304,7 @@ class IngestViewTestCase(TransactionTestCase):
             issue.save()
 
             # unmute via API
-            BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), project, request))
+            digest_event(**_digest_params(create_event_data(), project, request))
 
             self.assertEqual(expected_called, send_unmute_alert.delay.called)
 
@@ -308,7 +316,7 @@ class IngestViewTestCase(TransactionTestCase):
         request = self.request_factory.post("/api/1/store/")
 
         # new event
-        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), project, request))
+        digest_event(**_digest_params(create_event_data(), project, request))
 
         issue = Issue.objects.get(project=project)
         issue.is_resolved = True
@@ -318,7 +326,7 @@ class IngestViewTestCase(TransactionTestCase):
         # regression, on new release
         event_data = create_event_data()
         event_data["release"] = "1.0"
-        BaseIngestAPIView().digest_event(**_digest_params(event_data, project, request))
+        digest_event(**_digest_params(event_data, project, request))
 
         issue = Issue.objects.get(project=project)
         self.assertEqual(False, issue.is_resolved)
@@ -331,11 +339,11 @@ class IngestViewTestCase(TransactionTestCase):
         event_data = create_event_data()
 
         # first time
-        BaseIngestAPIView().digest_event(**_digest_params(event_data, project, request))
+        digest_event(**_digest_params(event_data, project, request))
 
         with self.assertRaises(ValidationError):
             # second time
-            BaseIngestAPIView().digest_event(**_digest_params(event_data, project, request))
+            digest_event(**_digest_params(event_data, project, request))
 
     def test_ingest_view_stores_events_at(self):
         request = self.request_factory.post("/api/1/store/")
@@ -343,7 +351,7 @@ class IngestViewTestCase(TransactionTestCase):
         event_data = create_event_data()
         event_data["release"] = "1.0"
 
-        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.loud_project, request))
+        digest_event(**_digest_params(event_data, self.loud_project, request))
 
         self.assertEqual(1, Issue.objects.count())
         self.assertEqual("1.0\n", Issue.objects.get().events_at)
@@ -729,7 +737,7 @@ class IngestViewTestCase(TransactionTestCase):
             else:
                 with self.assertLogs("bugsink.ingest", level="WARNING") as logs:
                     check()
-                self.assertIn("ValidationError in digest_event", logs.output[0])
+                self.assertIn("ValidationError in digest", logs.output[0])
 
         self.assertEqual(1, Issue.objects.filter(project=project).count())
         self.assertEqual(1, Event.objects.filter(project=project).count())
@@ -758,6 +766,25 @@ class IngestViewTestCase(TransactionTestCase):
 
         self.assertTrue(b"Max length" in response.content, response.content)
         self.assertTrue(b"exceeded" in response.content, response.content)
+
+    @override_settings(FEATURE_BROTLI=False)
+    def test_envelope_endpoint_brotli_disabled(self):
+        project = Project.objects.create(name="test")
+        sentry_auth_header = get_header_value(f"http://{ project.sentry_key }@hostisignored/{ project.id }")
+
+        response = self.client.post(
+            f"/api/{ project.id }/envelope/",
+            content_type="application/json",
+            headers={
+                "X-Sentry-Auth": sentry_auth_header,
+                "Content-Encoding": "br",
+            },
+            data=brotli.compress(b"{}"),
+        )
+
+        self.assertEqual(400, response.status_code)
+        self.assertTrue(b"Brotli content encoding is disabled" in response.content, response.content)
+        self.assertEqual(0, Event.objects.count())
 
     @tag("samples")
     def test_filestore(self):
@@ -921,7 +948,7 @@ class IngestViewTestCase(TransactionTestCase):
             self.assertEqual(issue.stored_event_count, issue.event_set.all().count())
 
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=0)
-    @patch("ingest.views.check_for_thresholds")
+    @patch("ingest.digestion.check_for_thresholds")
     def test_count_project_periods_and_act_on_it_zero(self, patched_check_for_thresholds):
         # actually having a 0-quota would be nonsensical but let's at least not crash for that case
 
@@ -930,13 +957,13 @@ class IngestViewTestCase(TransactionTestCase):
 
         project = Project.objects.create(name="test")
 
-        BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        count_project_periods_and_act_on_it(project, now)
 
         # I don't care much for the exact handling of the nonsensical case, as long as "quota_exceeded" gets marked
         self.assertEqual(now + relativedelta(minutes=5), project.quota_exceeded_until)
 
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
-    @patch("ingest.views.check_for_thresholds")
+    @patch("ingest.digestion.check_for_thresholds")
     def test_count_project_periods_and_act_on_it_simple_case(self, patched_check_for_thresholds):
         patched_check_for_thresholds.side_effect = check_for_thresholds  # the patch is only there to count calls
         now = timezone.now()
@@ -944,7 +971,7 @@ class IngestViewTestCase(TransactionTestCase):
         project = Project.objects.create(name="test")
 
         # first call
-        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        result = count_project_periods_and_act_on_it(project, now)
 
         self.assertEqual(True, result)
         self.assertEqual(1, project.digested_event_count)
@@ -954,7 +981,7 @@ class IngestViewTestCase(TransactionTestCase):
         create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
 
         # second call
-        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        result = count_project_periods_and_act_on_it(project, now)
 
         self.assertEqual(True, result)
         self.assertEqual(2, project.digested_event_count)
@@ -965,7 +992,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         # third call (equals but does not exceed quota, so this event should still be accepted, but the door should be
         # closed right after it)
-        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        result = count_project_periods_and_act_on_it(project, now)
 
         self.assertEqual(True, result)
         self.assertEqual(3, project.digested_event_count)
@@ -975,7 +1002,7 @@ class IngestViewTestCase(TransactionTestCase):
         create_event(project, timestamp=now, project_digest_order=3)  # result was True, proceed accordingly
 
         # fourth call
-        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        result = count_project_periods_and_act_on_it(project, now)
 
         self.assertEqual(False, result)  # should be droped immediately
         self.assertEqual(3, project.digested_event_count)  # nothing is digested
@@ -983,7 +1010,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(2, patched_check_for_thresholds.call_count)  # no expensive check (use quota_exceeded_until)
 
         # xth call (after a while)
-        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now + relativedelta(minutes=6))
+        result = count_project_periods_and_act_on_it(project, now + relativedelta(minutes=6))
 
         self.assertEqual(True, result)
         self.assertEqual(4, project.digested_event_count)
@@ -991,7 +1018,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.assertEqual(3, patched_check_for_thresholds.call_count)  # the check is done on "re-enter"
 
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=100)
-    @patch("ingest.views.check_for_thresholds")
+    @patch("ingest.digestion.check_for_thresholds")
     def test_count_project_periods_and_act_on_it_in_face_of_evication(self, patched_check_for_thresholds):
         patched_check_for_thresholds.side_effect = check_for_thresholds  # the patch is only there to count calls
         now = timezone.now()
@@ -999,7 +1026,7 @@ class IngestViewTestCase(TransactionTestCase):
         project = Project.objects.create(name="test")
 
         # first call
-        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        result = count_project_periods_and_act_on_it(project, now)
 
         self.assertEqual(True, result)
         self.assertEqual(1, project.digested_event_count)
@@ -1009,7 +1036,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         # calls 2 - 98 are eluded here; this mimicks eviction; we do manually update project.digested_event_count though
         project.digested_event_count = 98
-        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        result = count_project_periods_and_act_on_it(project, now)
 
         self.assertEqual(True, result)
         self.assertEqual(99, project.digested_event_count)
@@ -1019,7 +1046,7 @@ class IngestViewTestCase(TransactionTestCase):
 
         # 100th call (equals but does not exceed quota, so this event should still be accepted, but the door should be
         # closed right after it)
-        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        result = count_project_periods_and_act_on_it(project, now)
 
         self.assertEqual(True, result)
         self.assertEqual(100, project.digested_event_count)
@@ -1028,7 +1055,7 @@ class IngestViewTestCase(TransactionTestCase):
         create_event(project, timestamp=now, project_digest_order=100)  # result was True, proceed accordingly
 
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
-    @patch("ingest.views.check_for_thresholds")
+    @patch("ingest.digestion.check_for_thresholds")
     def test_count_project_periods_and_act_on_it_new_check_done_but_below_threshold(self, patched_check_for_thresholds):
         patched_check_for_thresholds.side_effect = check_for_thresholds  # the patch is only there to count calls
         now = timezone.now()
@@ -1036,21 +1063,21 @@ class IngestViewTestCase(TransactionTestCase):
         project = Project.objects.create(name="test")
 
         # first and second call as in "simple_case" test
-        BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        count_project_periods_and_act_on_it(project, now)
         create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
 
-        BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        count_project_periods_and_act_on_it(project, now)
         create_event(project, timestamp=now, project_digest_order=2)  # result was True, proceed accordingly
 
         # third call must trigger the check; if it happens outside of the 5-minute period the result should be OK though
-        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now + relativedelta(minutes=6))
+        result = count_project_periods_and_act_on_it(project, now + relativedelta(minutes=6))
 
         self.assertEqual(True, result)
         self.assertIsNone(project.quota_exceeded_until)
         self.assertEqual(2, patched_check_for_thresholds.call_count)  # the check was done right at the lower bound
 
     @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=3)
-    @patch("ingest.views.check_for_thresholds")
+    @patch("ingest.digestion.check_for_thresholds")
     def test_count_project_periods_and_act_on_it_immediate_overshoot(self, patched_check_for_thresholds):
         # a test that documents the current behavior for an edge case, rather than make a value-judgement about it. The
         # scenario is: what if an event comes into the digestion pipeline that is over budget (as opposed to being the
@@ -1063,7 +1090,7 @@ class IngestViewTestCase(TransactionTestCase):
         project = Project.objects.create(name="test")
 
         # first call (assertions implied, as in simple_case)
-        result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+        result = count_project_periods_and_act_on_it(project, now)
         create_event(project, timestamp=now, project_digest_order=1)  # result was True, proceed accordingly
 
         with override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=1):
@@ -1072,7 +1099,7 @@ class IngestViewTestCase(TransactionTestCase):
             project.save()
 
             # second call, with down-tuned quota; the 2nd event would be immediately over-quota
-            result = BaseIngestAPIView.count_project_periods_and_act_on_it(project, now)
+            result = count_project_periods_and_act_on_it(project, now)
 
             # despite being over-quota, we still accept it. This is the "document without value judgement" part of the
             # test.
@@ -1098,7 +1125,7 @@ class IngestViewTestCase(TransactionTestCase):
         project_b.digested_event_count = 1
         project_b.save(update_fields=["digested_event_count"])
 
-        result = BaseIngestAPIView.count_installation_periods_and_act_on_it(
+        result = count_installation_periods_and_act_on_it(
             installation,
             now + relativedelta(seconds=2),
         )
@@ -1114,7 +1141,7 @@ class IngestViewTestCase(TransactionTestCase):
         first_hour = datetime.datetime(2026, 6, 14, 12, 34, tzinfo=datetime.timezone.utc)
         second_event = first_hour + datetime.timedelta(minutes=1)
 
-        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request, first_hour))
+        digest_event(**_digest_params(create_event_data(), self.quiet_project, request, first_hour))
 
         self.assertEqual(1, Issue.objects.count())
         self.assertEqual(1, Issue.objects.get().stored_event_count)
@@ -1130,7 +1157,7 @@ class IngestViewTestCase(TransactionTestCase):
             IssueEventCountsPerHour.objects.get(issue=Issue.objects.get(), bucket=hour_bucket(first_hour)).count,
         )
 
-        BaseIngestAPIView().digest_event(
+        digest_event(
             **_digest_params(create_event_data(), self.quiet_project, request, second_event))
         self.assertEqual(1, Project.objects.get(id=self.quiet_project.id).issue_count)
         self.assertEqual(2, Issue.objects.get().stored_event_count)
@@ -1148,7 +1175,7 @@ class IngestViewTestCase(TransactionTestCase):
     def test_ingest_stores_current_grouping_mechanism(self):
         request = self.request_factory.post("/api/1/store/")
 
-        BaseIngestAPIView().digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
+        digest_event(**_digest_params(create_event_data(), self.quiet_project, request))
 
         self.assertEqual(CURRENT_GROUPING_MECHANISM, Grouping.objects.get().grouping_mechanism)
 
@@ -1157,7 +1184,7 @@ class IngestViewTestCase(TransactionTestCase):
         event_data = create_event_data()
         event_data["fingerprint"] = ["shared-fingerprint"]
 
-        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+        digest_event(**_digest_params(event_data, self.quiet_project, request))
 
         self.assertEqual(MECHANISM_INDEPENDENT_GROUPING, Grouping.objects.get().grouping_mechanism)
 
@@ -1183,7 +1210,7 @@ class IngestViewTestCase(TransactionTestCase):
         event_data = create_event_data()
         event_data["fingerprint"] = ["shared", "fingerprint"]
         request = self.request_factory.post("/api/1/store/")
-        BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+        digest_event(**_digest_params(event_data, self.quiet_project, request))
 
         # no new issue is created, but the correct mechanism-independent grouping is created for the legacy issue.
         self.assertEqual(1, Issue.objects.count())
@@ -1207,7 +1234,7 @@ class IngestViewTestCase(TransactionTestCase):
         )
         first = create_event_data(exception_type="TransitionError")
 
-        BaseIngestAPIView().digest_event(**_digest_params(first, project, request, now))
+        digest_event(**_digest_params(first, project, request, now))
         old_issue = Issue.objects.get()
 
         project.grouping_mechanism = BUGSINK_GROUPING_V2
@@ -1216,7 +1243,7 @@ class IngestViewTestCase(TransactionTestCase):
         project.save()
 
         second = create_event_data(exception_type="TransitionError")
-        BaseIngestAPIView().digest_event(
+        digest_event(
             **_digest_params(second, project, request, now + datetime.timedelta(minutes=1)))
 
         self.assertEqual(1, Issue.objects.count())
@@ -1242,7 +1269,7 @@ class IngestViewTestCase(TransactionTestCase):
             alert_on_unmute=False,
         )
 
-        BaseIngestAPIView().digest_event(
+        digest_event(
             **_digest_params(create_event_data(exception_type="BackAndForthError"), project, request, now))
         old_issue = Issue.objects.get()
 
@@ -1250,7 +1277,7 @@ class IngestViewTestCase(TransactionTestCase):
         project.previous_grouping_mechanism = BUGSINK_GROUPING_V1
         project.grouping_mechanism_upgraded_at = now
         project.save()
-        BaseIngestAPIView().digest_event(**_digest_params(
+        digest_event(**_digest_params(
             create_event_data(exception_type="BackAndForthError"),
             project,
             request,
@@ -1261,7 +1288,7 @@ class IngestViewTestCase(TransactionTestCase):
         project.previous_grouping_mechanism = BUGSINK_GROUPING_V2
         project.grouping_mechanism_upgraded_at = now + datetime.timedelta(minutes=2)
         project.save()
-        BaseIngestAPIView().digest_event(**_digest_params(
+        digest_event(**_digest_params(
             create_event_data(exception_type="BackAndForthError"),
             project,
             request,
@@ -1290,7 +1317,7 @@ class IngestViewTestCase(TransactionTestCase):
         )
         first = create_event_data(exception_type="ExpiredTransitionError")
 
-        BaseIngestAPIView().digest_event(**_digest_params(first, project, request, now))
+        digest_event(**_digest_params(first, project, request, now))
 
         project.grouping_mechanism = BUGSINK_GROUPING_V2
         project.previous_grouping_mechanism = BUGSINK_GROUPING_V1
@@ -1298,7 +1325,7 @@ class IngestViewTestCase(TransactionTestCase):
         project.save()
 
         second = create_event_data(exception_type="ExpiredTransitionError")
-        BaseIngestAPIView().digest_event(
+        digest_event(
             **_digest_params(second, project, request, now + datetime.timedelta(minutes=1)))
 
         self.assertEqual(2, Issue.objects.count())
@@ -1313,7 +1340,7 @@ class IngestViewTestCase(TransactionTestCase):
         first = create_event_data()
         first["exception"] = {"values": [{"type": "FirstError", "value": "first message"}]}
         first["fingerprint"] = ["shared-fingerprint"]
-        BaseIngestAPIView().digest_event(**_digest_params(first, self.quiet_project, request))
+        digest_event(**_digest_params(first, self.quiet_project, request))
 
         issue = Issue.objects.get()
         self.assertEqual("FirstError", issue.calculated_type)
@@ -1322,7 +1349,7 @@ class IngestViewTestCase(TransactionTestCase):
         second = create_event_data()
         second["exception"] = {"values": [{"type": "SecondError", "value": "second message"}]}
         second["fingerprint"] = ["shared-fingerprint"]
-        BaseIngestAPIView().digest_event(**_digest_params(second, self.quiet_project, request))
+        digest_event(**_digest_params(second, self.quiet_project, request))
 
         # still a single issue (same fingerprint), but its title fields now reflect the most recent event
         self.assertEqual(1, Issue.objects.count())
@@ -1354,7 +1381,7 @@ class IngestViewTestCase(TransactionTestCase):
         self.quiet_project.save()
 
         with patch("issues.grouping_mechanisms.GROUPING_MECHANISMS", GROUPING_MECHANISMS + [mocked_grouping_mechanism]):
-            BaseIngestAPIView().digest_event(**_digest_params(event_data, self.quiet_project, request))
+            digest_event(**_digest_params(event_data, self.quiet_project, request))
 
         issue = Issue.objects.get()
         self.assertEqual("DisplayError", issue.calculated_type)
@@ -1656,7 +1683,58 @@ class MinidumpIngestRegressionTestCase(TransactionTestCase):
         self.minidump_filename = os.path.join(
             os.getenv("SAMPLES_DIR", "../event-samples"), "minidumps", "linux_overflow.dmp")
 
-    def test_direct_minidump_endpoint_ingests_minidump(self):
+    @override_settings(VALIDATE_ON_DIGEST="strict", MAX_ATTACHMENT_SIZE=64 * 1024)
+    def test_direct_minidump_endpoint_parses_without_transaction(self):
+        def merge_without_transaction(*args):
+            self.assertFalse(connection.in_atomic_block)
+            return merge_minidump_event(*args)
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with patch("ingest.tasks.merge_minidump_event", side_effect=merge_without_transaction) as merge:
+                with open(self.minidump_filename, "rb") as minidump:
+                    response = self.client.post(
+                        f"/api/{self.project.id}/minidump/",
+                        data={"upload_file_minidump": minidump},
+                        headers={"X-Sentry-Auth": self.sentry_auth_header},
+                    )
+
+            self.assertEqual(200, response.status_code, response.content)
+            merge.assert_called_once()
+            self.assertEqual("SIGABRT: Fatal Error: SIGABRT", Event.objects.get().title())
+            self.assertEqual([], os.listdir(tempdir))
+
+    @override_settings(MAX_ATTACHMENT_SIZE=64 * 1024)
+    def test_direct_minidump_endpoint_accepts_compressed_upload(self):
+        with open(self.minidump_filename, "rb") as minidump:
+            body = encode_multipart(BOUNDARY, {
+                "upload_file_minidump": minidump,
+                "sentry": json.dumps({"release": "1.2.3"}),
+            })
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            response = self.client.generic(
+                "POST",
+                f"/api/{self.project.id}/minidump/",
+                data=gzip.compress(body),
+                content_type=MULTIPART_CONTENT,
+                headers={"X-Sentry-Auth": self.sentry_auth_header, "Content-Encoding": "gzip"},
+            )
+
+            self.assertEqual(200, response.status_code, response.content)
+            event = Event.objects.get()
+            self.assertEqual("SIGABRT: Fatal Error: SIGABRT", event.title())
+            self.assertEqual("1.2.3", json.loads(event.get_raw_data())["release"])
+            self.assertEqual([], os.listdir(tempdir))
+
+    # These two tests are LLM-generated; not deeply inspected, but they do seem to cover the main cases we care about.
+    @override_settings(MAX_EVENTS_PER_5_MINUTES=1)
+    @patch("ingest.views.digest.delay")
+    def test_direct_minidump_endpoint_rejects_over_installation_quota(self, digest_delay):
+        installation = Installation.objects.get()
+        installation.quota_exceeded_until = timezone.now() + relativedelta(minutes=5)
+        installation.quota_exceeded_reason = json.dumps(["minute", 5, 1])
+        installation.save()
+
         with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
             with open(self.minidump_filename, "rb") as minidump:
                 response = self.client.post(
@@ -1665,8 +1743,108 @@ class MinidumpIngestRegressionTestCase(TransactionTestCase):
                     headers={"X-Sentry-Auth": self.sentry_auth_header},
                 )
 
+            self.assertEqual(429, response.status_code)
+            self.assertEqual([], os.listdir(tempdir))
+            digest_delay.assert_not_called()
+
+    @override_settings(MAX_EVENTS_PER_PROJECT_PER_5_MINUTES=1)
+    @patch("ingest.views.digest.delay")
+    def test_direct_minidump_endpoint_rejects_over_project_quota(self, digest_delay):
+        self.project.quota_exceeded_until = timezone.now() + relativedelta(minutes=5)
+        self.project.quota_exceeded_reason = json.dumps(["minute", 5, 1])
+        self.project.save()
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with open(self.minidump_filename, "rb") as minidump:
+                response = self.client.post(
+                    f"/api/{self.project.id}/minidump/",
+                    data={"upload_file_minidump": minidump},
+                    headers={"X-Sentry-Auth": self.sentry_auth_header},
+                )
+
+            self.assertEqual(429, response.status_code)
+            self.assertEqual([], os.listdir(tempdir))
+            digest_delay.assert_not_called()
+
+    @override_settings(MAX_ATTACHMENT_SIZE=10 * 1024)
+    @patch("ingest.views.capture_or_log_exception")
+    def test_direct_minidump_endpoint_rejects_oversized_upload(self, capture):
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with open(self.minidump_filename, "rb") as minidump:
+                response = self.client.post(
+                    f"/api/{self.project.id}/minidump/",
+                    data={"upload_file_minidump": minidump},
+                    headers={"X-Sentry-Auth": self.sentry_auth_header},
+                )
+
+            self.assertEqual(413, response.status_code, response.content)
+            self.assertIn("MAX_ATTACHMENT_SIZE", response.json()["detail"])
+            self.assertEqual(0, Event.objects.count())
+            self.assertEqual([], os.listdir(tempdir))
+            capture.assert_not_called()
+
+    @override_settings(MAX_ATTACHMENT_SIZE=10 * 1024)
+    @patch("ingest.views.capture_or_log_exception")
+    def test_direct_minidump_endpoint_rejects_oversized_compressed_upload(self, capture):
+        with open(self.minidump_filename, "rb") as minidump:
+            body = gzip.compress(encode_multipart(BOUNDARY, {"upload_file_minidump": minidump}))
+        self.assertLess(len(body), 10 * 1024)
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            response = self.client.generic(
+                "POST",
+                f"/api/{self.project.id}/minidump/",
+                data=body,
+                content_type=MULTIPART_CONTENT,
+                headers={"X-Sentry-Auth": self.sentry_auth_header, "Content-Encoding": "gzip"},
+            )
+
+            self.assertEqual(413, response.status_code, response.content)
+            self.assertIn("MAX_ATTACHMENT_SIZE", response.json()["detail"])
+            self.assertEqual(0, Event.objects.count())
+            self.assertEqual([], os.listdir(tempdir))
+            capture.assert_not_called()
+
+    @override_settings(VALIDATE_ON_DIGEST="strict")
+    def test_invalid_event_is_rejected_before_minidump_parsing(self):
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with patch("ingest.tasks.merge_minidump_event") as merge:
+                with open(self.minidump_filename, "rb") as minidump, self.assertLogs("bugsink.ingest", level="WARNING"):
+                    response = self.client.post(
+                        f"/api/{self.project.id}/minidump/",
+                        data={
+                            "upload_file_minidump": minidump,
+                            "sentry": json.dumps({"level": "not-a-level"}),
+                        },
+                        headers={"X-Sentry-Auth": self.sentry_auth_header},
+                    )
+
             self.assertEqual(200, response.status_code, response.content)
-            self.assertEqual(1, Event.objects.count())
+            merge.assert_not_called()
+            self.assertEqual(0, Event.objects.count())
+            self.assertEqual([], os.listdir(tempdir))
+
+    @override_settings(VALIDATE_ON_DIGEST="strict")
+    def test_zero_retention_schedules_cleanup_despite_invalid_payload(self):
+        existing_event = create_event(self.project)
+        self.project.stored_event_count = 1
+        self.project.retention_max_event_count = 0
+        self.project.save()
+
+        with tempfile.TemporaryDirectory() as tempdir, override_settings(INGEST_STORE_BASE_DIR=tempdir):
+            with patch("events.tasks.delete_by_age_until_under_retention_max.delay") as cleanup_delay:
+                response = self.client.post(
+                    f"/api/{self.project.id}/minidump/",
+                    data={
+                        "upload_file_minidump": io.BytesIO(b"not a minidump"),
+                        "sentry": json.dumps({"level": "not-a-level"}),
+                    },
+                    headers={"X-Sentry-Auth": self.sentry_auth_header},
+                )
+
+            self.assertEqual(200, response.status_code, response.content)
+            cleanup_delay.assert_called_once_with(self.project.id)
+            self.assertEqual(existing_event.pk, Event.objects.get().pk)
             self.assertEqual([], os.listdir(tempdir))
 
     def test_minidump_only_envelope_does_not_duplicate_exceptions_regression(self):
